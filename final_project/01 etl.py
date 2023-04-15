@@ -13,6 +13,25 @@ print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
+from pyspark.sql.types import *
+
+inputPath = "/databricks-datasets/structured-streaming/events/"
+
+# Since we know the data format already, let's define the schema to speed up processing (no need for Spark to infer schema)
+jsonSchema = StructType([ StructField("time", TimestampType(), True), StructField("action", StringType(), True) ])
+
+# Static DataFrame representing data in the JSON files
+staticInputDF = (
+  spark
+    .read
+    .schema(jsonSchema)
+    .json(inputPath)
+)
+
+display(staticInputDF)
+
+# COMMAND ----------
+
 import json
 
 # Return Success
