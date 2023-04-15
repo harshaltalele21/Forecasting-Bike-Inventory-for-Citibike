@@ -21,9 +21,7 @@ dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
 # COMMAND ----------
 
 
-print("ayush")
-
-print("hello")
+print("bc")
 
 
 # COMMAND ----------
