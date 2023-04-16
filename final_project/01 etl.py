@@ -97,6 +97,7 @@ station_data = bike_trip_data \
 # Display the streaming station data
 display(station_data)
 
+
 # COMMAND ----------
 
 import json
