@@ -13,34 +13,70 @@ print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
-# Define the schema for the bike trip data
-bike_trip_schema = StructType([
-  StructField("trip_id", StringType()),
-  StructField("start_time", StringType()),
-  StructField("end_time", StringType()),
-  StructField("bike_id", StringType()),
-  StructField("duration_sec", IntegerType()),
-  StructField("start_station_name", StringType()),
-  StructField("start_station_id", IntegerType()),
-  StructField("end_station_name", StringType()),
-  StructField("end_station_id", IntegerType()),
-  StructField("user_type", StringType()),
-  StructField("bike_share_for_all_trip", StringType())
-])
+bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
+weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
 
 # Stream bike trip data into a DataFrame
 bike_trip_data = spark \
   .readStream \
-  .schema(bike_trip_schema) \
+  .schema(bike_for_schema.schema) \
   .option("maxFilesPerTrigger", 1) \
   .csv(BIKE_TRIP_DATA_PATH)
 
+weather_data = spark \
+  .readStream \
+  .schema(weather_for_schema.schema) \
+  .option("maxFilesPerTrigger", 1) \
+  .csv(NYC_WEATHER_FILE_PATH)
+
 # Load station information and status into DataFrames
-station_info = spark.read.format("delta").load(BRONZE_STATION_INFO_PATH)
-station_status = spark.read.format("delta").load(BRONZE_STATION_STATUS_PATH)
+station_info_all = spark.read.format("delta").load(BRONZE_STATION_INFO_PATH)
+station_status_all = spark.read.format("delta").load(BRONZE_STATION_STATUS_PATH)
+weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
+
+
+# COMMAND ----------
+
+station_info=station_info_all.filter(station_info_all["name"]==GROUP_STATION_ASSIGNMENT)
+display(station_info)
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# #station_status = station_status_all \
+# #  .join(station_info, station_status_all.station_id == station_info.station_id, "inner")
+# display(station_status)
+
+station_status=station_status_all.filter(station_status_all["station_id"]==station_info.select("station_id").distinct().collect()[0]["station_id"])
+
+display(station_status)
+
+# COMMAND ----------
+
+#loc=GROUP_DATA_PATH+
+
+#import os
+#dbutils.fs.ls("dbfs:/FileStore/tables/")
+#station_status.write.format("delta").saveAsTable("station_info_table")
+#df_writer = pyspark.sql.DataFrameWriter(station_status)
+#df.write.saveAsTable("my_database.my_table")
+station_status.write.saveAsTable("G04_db.bronze_station_info", format='delta', mode='overwrite',path=GROUP_DATA_PATH)
+
+# COMMAND ----------
+
+display(dbutils.fs.ls(GROUP_DATA_PATH))
+
+# COMMAND ----------
 
 # Join station information and status with the bike trip data
 station_data = bike_trip_data \
@@ -60,10 +96,6 @@ station_data = bike_trip_data \
 
 # Display the streaming station data
 display(station_data)
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
