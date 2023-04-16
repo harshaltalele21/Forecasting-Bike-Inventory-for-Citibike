@@ -17,3 +17,14 @@ import json
 
 # Return Success
 dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
+
+# COMMAND ----------
+
+print("bc")
+
+print("hello")
+
+
+# COMMAND ----------
+
+
