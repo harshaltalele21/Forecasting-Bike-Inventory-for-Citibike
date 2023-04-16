@@ -13,8 +13,6 @@ print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
-
-
 # COMMAND ----------
 
 from pyspark.sql.functions import *
@@ -22,6 +20,7 @@ from pyspark.sql.types import *
 
 bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
 weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
+
 
 # Stream bike trip data into a DataFrame
 bike_trip_data = spark \
