@@ -28,14 +28,14 @@ bike_trip_data = spark \
   .readStream \
   .schema(bike_for_schema.schema) \
   .option("maxFilesPerTrigger", 1) \
-  .option("append")
+  .option("complete","true") \
   .csv(BIKE_TRIP_DATA_PATH)
 
 weather_data = spark \
   .readStream \
   .schema(weather_for_schema.schema) \
   .option("maxFilesPerTrigger", 1) \
-  .option("append")
+  .option("complete","true") \
   .csv(NYC_WEATHER_FILE_PATH)
 
 # Load station information and status into DataFrames
@@ -99,7 +99,7 @@ display(spark.sql('show tables'))
 
 # COMMAND ----------
 
-spark.sql('select count(*) from bronze_station_info').show()
+spark.sql('select * from g04_db.bronze_bike_trip_historic').show()
 
 # COMMAND ----------
 
