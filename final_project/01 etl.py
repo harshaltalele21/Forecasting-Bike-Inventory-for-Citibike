@@ -11,15 +11,16 @@ promote_model = bool(True if str(dbutils.widgets.get('04.promote_model')).lower(
 print(start_date,end_date,hours_to_forecast, promote_model)
 print("YOUR CODE HERE...")
 
+
 # COMMAND ----------
 
-# Read stream to get historic data and load the given bronze tables into respective dataframes
 
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
 bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
 weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
+
 
 bike_trip_data = spark \
   .readStream \
@@ -134,6 +135,7 @@ weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronz
 
 # Validation
 display(spark.sql('select * from g04_db.bronze_weather_historic'))
+
 
 # COMMAND ----------
 
