@@ -13,9 +13,7 @@ print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
+# Read stream to get historic data and load the given bronze tables into respective dataframes
 
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -23,7 +21,6 @@ from pyspark.sql.types import *
 bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
 weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
 
-# Stream bike trip data into a DataFrame
 bike_trip_data = spark \
   .readStream \
   .schema(bike_for_schema.schema) \
@@ -38,7 +35,6 @@ weather_data = spark \
   .option("complete","true") \
   .csv(NYC_WEATHER_FILE_PATH)
 
-# Load station information and status into DataFrames
 station_info_all = spark.read.format("delta").load(BRONZE_STATION_INFO_PATH)
 station_status_all = spark.read.format("delta").load(BRONZE_STATION_STATUS_PATH)
 weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
@@ -46,39 +42,32 @@ weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
 
 # COMMAND ----------
 
+# Creating station info table for our station name
 station_info=station_info_all.filter(station_info_all["name"]==GROUP_STATION_ASSIGNMENT)
 display(station_info)
 
 # COMMAND ----------
 
+GROUP_STATION_ASSIGNMENT
+
+# COMMAND ----------
+
+# Creating station status table for our station name
 group_id=station_info.select("station_id").collect()[0][0]
-
 station_status=station_status_all.filter(station_status_all["station_id"]==group_id)
-
 display(station_status)
 
 # COMMAND ----------
 
-display(bike_trip_data)
-
-# COMMAND ----------
-
-#loc=GROUP_DATA_PATH+
-
-#import os
-#dbutils.fs.ls("dbfs:/FileStore/tables/")
-#station_status.write.format("delta").saveAsTable("station_info_table")
-#df_writer = pyspark.sql.DataFrameWriter(station_status)
-#df.write.saveAsTable("my_database.my_table")
+# Creating dynamic tables
 station_status.write.saveAsTable("G04_db.bronze_station_status_dynamic", format='delta', mode='overwrite')
 station_info.write.saveAsTable("G04_db.bronze_station_info_dynamic", format='delta', mode='overwrite')
 weather_dynamic_all.write.saveAsTable("G04_db.bronze_weather_info_dynamic", format='delta', mode='overwrite')
-#bike_trip_data.write.saveAsTable("G04_db.bronze_bike_trip_historic", format='delta', mode='overwrite')
-#weather_data.write.saveAsTable("G04_db.bronze_weather_historic", format='delta', mode='overwrite')
 
 # COMMAND ----------
 
-display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/"))
+# Show files under group file path for respective historic data sets
+display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data/"))
 
 # COMMAND ----------
 
@@ -95,32 +84,56 @@ spark.sql('use database g04_db')
 
 # COMMAND ----------
 
+# Get tables
 display(spark.sql('show tables'))
 
 # COMMAND ----------
 
-spark.sql('select * from g04_db.bronze_bike_trip_historic').show()
+# Validation
+display(spark.sql('select count(started_at) from g04_db.bronze_bike_trip_historic where (end_station_name=="6 Ave & W 33 St") or \
+(start_station_name=="6 Ave & W 33 St")'))
 
 # COMMAND ----------
 
-#bike_trip_data.write.saveAsTable("G04_db.bronze_bike_trip_historic", format='delta', mode='overwrite')
+# Validation
+display(spark.sql('select count(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
 
-#display(type(station_info_all))
-#display(type(bike_trip_data))
+# COMMAND ----------
+
+# Write Strean to append bike trips data
 
 bike_trip_data.writeStream.format("delta")\
   .outputMode("append")\
-  .trigger(once=True)\
-  .option("checkpointLocation","dbfs:/FileStore/tables/G04/")\
-  .toTable("bronze_bike_trip_historic")
+  .option("checkpointLocation","dbfs:/FileStore/tables/G04/bike_trip_data/")\
+  .start("dbfs:/FileStore/tables/G04/bike_trip_data/")
+
 
 # COMMAND ----------
 
-display(bike_trip_data.count())
+# Creating bike trips historic table
+bike_stream = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/bike_trip_data/")
+bike_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_bike_trip_historic")
 
 # COMMAND ----------
 
-display(BRONZE_STATION_INFO_PATH)
+# Write Strean to append weather data
+
+weather_data.writeStream.format("delta")\
+  .outputMode("append")\
+  .option("checkpointLocation","dbfs:/FileStore/tables/G04/weather_data/")\
+  .start("dbfs:/FileStore/tables/G04/weather_data/")
+
+
+# COMMAND ----------
+
+# Creating weather historic table
+weather_stream = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/weather_data/")
+weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_weather_historic")
+
+# COMMAND ----------
+
+# Validation
+display(spark.sql('select * from g04_db.bronze_weather_historic'))
 
 # COMMAND ----------
 
