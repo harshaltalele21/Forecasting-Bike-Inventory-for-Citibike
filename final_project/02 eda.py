@@ -13,7 +13,7 @@ print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
-from pyspark.sql.functions import expr,col,month,year,dayofmonth
+from pyspark.sql.functions import expr,col,month,year,dayofmonth,dayofweek
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import concat_ws
 
@@ -32,7 +32,9 @@ display(raw_df)
 df = raw_df.select("ride_id", "rideable_type", "started_at", "ended_at", "start_station_name", "start_station_id", "end_station_name", "end_station_id" ,"member_casual") \
                 .withColumn("year", year(col("started_at"))) \
                 .withColumn("month", month(col("started_at"))) \
-                .withColumn("day", dayofmonth(col("started_at")))
+                .withColumn("day", dayofmonth(col("started_at"))) \
+                .withColumn("day_of_week", dayofweek(col("started_at")))
+df.show(10)
 
 
 # COMMAND ----------
@@ -141,6 +143,27 @@ plt.legend()
 
 # show the plot
 plt.show()
+
+# COMMAND ----------
+
+import matplotlib.pyplot as plt
+
+agg_df_dayofweek = df.groupBy("day_of_week")\
+                          .agg({"ride_id":"count"})\
+                          .withColumnRenamed("count(ride_id)","num_rides")\
+                          .orderBy("day_of_week")
+
+pandas_df = agg_df_dayofweek.toPandas()
+
+# plot the data using matplotlib
+plt.plot(pandas_df["day_of_week"], pandas_df["num_rides"])
+plt.xlabel("month")
+plt.xticks(rotation = 90)
+plt.ylabel("Number of Rides")
+plt.title("Total Bike Rides - By Day of Week")
+plt.show()
+
+print("1 -> Sunday & 7 -> Saturday")
 
 # COMMAND ----------
 
