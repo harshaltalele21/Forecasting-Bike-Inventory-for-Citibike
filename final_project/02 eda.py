@@ -219,6 +219,55 @@ plt.show()
 
 # COMMAND ----------
 
+# Q3
+import pandas as pd
+from pyspark.sql.functions import *
+from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
+
+dates = pd.DataFrame({'datetime':pd.date_range('2021-11-01', '2023-02-28')})
+#dates['date']=dates['date']
+#df = pd.DataFrame()
+#df['Date'] = dr
+
+cal = calendar()
+holidays = cal.holidays(start=dates["datetime"].min(), end=dates["datetime"].max())
+#holidays.dt.date
+dates["Holiday"] = dates["datetime"].isin(holidays)
+dates["Date"]=dates["datetime"].dt.date
+dates["Hol_Non_Hol"]=dates['Holiday'].map({True:"Holiday" ,False:"Non-Holiday"})
+dates=dates.drop(["Holiday","datetime"],axis=1)
+display(dates)
+
+# COMMAND ----------
+
+from pyspark.sql import SparkSession
+#Create PySpark SparkSession
+spark = SparkSession.builder \
+    .master("local[1]") \
+    .appName("SparkByExamples.com") \
+    .getOrCreate()
+#Create PySpark DataFrame from Pandas
+dates=spark.createDataFrame(dates) 
+dates.show()
+
+# COMMAND ----------
+
+#.orderBy("member_casual","rideable_type","Hol_Non_Hol","num_rides")
+df_hol=df[["rideable_type","member_casual","ride_id","started_at"]]
+df_hol=df_hol.withColumn("date",to_date("started_at"))
+
+df_hol_v1=df_hol.join(dates,df_hol.date == dates.Date,"inner").select("rideable_type","member_casual","Hol_Non_Hol","started_at","ride_id",df_hol.date)
+df_hol_v1
+agg_hol = df_hol_v1.groupBy("rideable_type", "member_casual", "Hol_Non_Hol","date").agg({"ride_id":"count"}).withColumnRenamed("count(ride_id)","num_rides")
+display(agg_hol)
+
+# COMMAND ----------
+
+agg_hol_v1=agg_hol.groupBy("rideable_type", "member_casual", "Hol_Non_Hol").agg({"num_rides":"mean"}).withColumnRenamed("average(num_rides)","avg_rides").orderBy("rideable_type","member_casual","Hol_Non_Hol")
+display(agg_hol_v1)
+
+# COMMAND ----------
+
 import json
 
 # Return Success
