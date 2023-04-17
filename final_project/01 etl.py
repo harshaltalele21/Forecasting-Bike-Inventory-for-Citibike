@@ -8,8 +8,8 @@ end_date = str(dbutils.widgets.get('02.end_date'))
 hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
 promote_model = bool(True if str(dbutils.widgets.get('04.promote_model')).lower() == 'yes' else False)
 
-print(start_date,end_date,hours_to_forecast, promote_model)
-print("YOUR CODE HERE...")
+#print(start_date,end_date,hours_to_forecast, promote_model)
+#print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
@@ -67,16 +67,12 @@ weather_dynamic_all.write.saveAsTable("G04_db.bronze_weather_info_dynamic", form
 # COMMAND ----------
 
 # Show files under group file path for respective historic data sets
-display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data/"))
+display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data"))
 
 # COMMAND ----------
 
-#import os
-#os.rmdir("dbfs:/FileStore/tables/G04/sources/")
-
-import shutil
-
-shutil.rmtree("dbfs:/FileStore/tables/G04/")
+# to remove files from directory
+dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_dataweather_data/',True)
 
 # COMMAND ----------
 
@@ -90,13 +86,35 @@ display(spark.sql('show tables'))
 # COMMAND ----------
 
 # Validation
-display(spark.sql('select count(started_at) from g04_db.bronze_bike_trip_historic where (end_station_name=="6 Ave & W 33 St") or \
-(start_station_name=="6 Ave & W 33 St")'))
+display(spark.sql('select * from g04_db.bronze_bike_trip_historic where (end_station_name=="6 Ave & W 33 St") or \
+(start_station_name=="6 Ave & W 33 St")').limit(5))
+
+# COMMAND ----------
+
+import pandas as pd
+from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
+
+dr = pd.date_range(start='2021-11-01', end='2023-02-28')
+df = pd.DataFrame()
+df['Date'] = dr
+
+cal = calendar()
+holidays = cal.holidays(start=dr.min(), end=dr.max())
+
+df['Date']=pd.to_datetime(df["Date"]).dt.date
+df['Holiday'] = df['Date'].isin(holidays)
+display(df)
+
+# COMMAND ----------
+
+# Validation# Validation
+display(spark.sql('select max(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))# Validation# Validation
+display(spark.sql('select max(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
 
 # COMMAND ----------
 
 # Validation
-display(spark.sql('select count(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
+display(spark.sql('select count(*) from g04_db.bronze_weather_historic'))
 
 # COMMAND ----------
 
@@ -104,7 +122,7 @@ display(spark.sql('select count(started_at) from g04_db.bronze_bike_trip_histori
 
 bike_trip_data.writeStream.format("delta")\
   .outputMode("append")\
-  .option("checkpointLocation","dbfs:/FileStore/tables/G04/bike_trip_data/")\
+  .option("checkpointLocation","dbfs:/FileStore/tables/G04/bike_trip_data/checkpoint")\
   .start("dbfs:/FileStore/tables/G04/bike_trip_data/")
 
 
@@ -120,7 +138,7 @@ bike_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_b
 
 weather_data.writeStream.format("delta")\
   .outputMode("append")\
-  .option("checkpointLocation","dbfs:/FileStore/tables/G04/weather_data/")\
+  .option("checkpointLocation","dbfs:/FileStore/tables/G04/weather_data/checkpoint")\
   .start("dbfs:/FileStore/tables/G04/weather_data/")
 
 
@@ -132,8 +150,7 @@ weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronz
 
 # COMMAND ----------
 
-# Validation
-display(spark.sql('select * from g04_db.bronze_weather_historic'))
+display(bike_stream.count())
 
 # COMMAND ----------
 
