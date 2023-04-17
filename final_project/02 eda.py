@@ -48,11 +48,27 @@ weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
 
 # COMMAND ----------
 
+df = spark.read.csv("dbfs:/FileStore/tables/raw/weather/", header=True, inferSchema=True)
+
+# COMMAND ----------
+
+df.count()
+
+# COMMAND ----------
+
 display(bike_trip_data)
 
 # COMMAND ----------
 
 df=bike_trip_data
+
+# COMMAND ----------
+
+merge_df = bike_trip_data.withColumnRenamed("started_at", "datetime")
+
+# COMMAND ----------
+
+display(merge_df)
 
 # COMMAND ----------
 
@@ -116,7 +132,7 @@ pandas_df = agg_df_month_with_index.toPandas()
 
 # plot the data using matplotlib
 plt.plot(pandas_df["index"], pandas_df["num_rides"])
-plt.xlabel("year")
+plt.xlabel("Month")
 plt.ylabel("Number of Rides")
 plt.title("Monthly Bike Rides")
 plt.show()
@@ -134,7 +150,7 @@ selected_df_member = new_df.select("started_at", "ended_at","member_casual") \
 
 # COMMAND ----------
 
-selected_df_member.show()
+display(selected_df_member)
 
 # COMMAND ----------
 
@@ -165,6 +181,8 @@ plt.show()
 # COMMAND ----------
 
 import matplotlib.pyplot as plt
+
+# COMMAND ----------
 
 # create a DataFrame with aggregated data
 agg_data = selected_df_member.groupBy("index", "member_casual").count()
@@ -228,7 +246,82 @@ plt.show()
 
 # COMMAND ----------
 
+# DBTITLE 1,Weather Data
+df = spark.sql('select * from g04_db.bronze_weather_historic')
 
+# COMMAND ----------
+
+display(df)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import from_unixtime
+df_time = df.withColumn('datetime', from_unixtime('dt'))
+
+# COMMAND ----------
+
+display(df_time)
+
+# COMMAND ----------
+
+df_new = df_time.select("lat") \
+                .withColumn("year", year(col("datetime"))) \
+                .withColumn("month", month(col("datetime")))
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+new_df = df_time.select("temp","datetime")
+
+# COMMAND ----------
+
+display(new_df)
+
+# COMMAND ----------
+
+pdf = new_df.toPandas()
+
+# COMMAND ----------
+
+plt.plot(pdf['datetime'], pdf['temp'])
+plt.xlabel('Month')
+plt.ylabel('Average Temperature')
+plt.show()
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+from pyspark.sql.functions import month
+
+# assuming your DataFrame is named "df"
+df_avg_temp = new_df.select(month('datetime').alias('month'), 'temp') \
+                .groupBy('month') \
+                .agg({'temp': 'avg'}) \
+                .orderBy('month')
+
+display(df_avg_temp)
+
+# COMMAND ----------
+
+df_inner_join = merge_df.join(df_time, on='datetime', how='inner')
+
+# COMMAND ----------
+
+display(df_inner_join)
 
 # COMMAND ----------
 
@@ -248,6 +341,16 @@ dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
 # COMMAND ----------
 
 display(spark.sql('show tables'))
+
+# COMMAND ----------
+
+from pyspark.sql.functions import from_unixtime
+
+data = df.withColumn('datetime', from_unixtime('dt'))
+
+# COMMAND ----------
+
+display(data)
 
 # COMMAND ----------
 
