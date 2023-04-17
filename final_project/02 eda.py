@@ -20,6 +20,72 @@ from pyspark.sql.functions import concat_ws
 
 # COMMAND ----------
 
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
+weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
+
+
+# Stream bike trip data into a DataFrame
+bike_trip_data = spark \
+  .readStream \
+  .schema(bike_for_schema.schema) \
+  .option("maxFilesPerTrigger", 1) \
+  .option("complete","true") \
+  .csv(BIKE_TRIP_DATA_PATH)
+
+weather_data = spark \
+  .readStream \
+  .schema(weather_for_schema.schema) \
+  .option("maxFilesPerTrigger", 1) \
+  .option("complete","true") \
+  .csv(NYC_WEATHER_FILE_PATH)
+
+# Load station information and status into DataFrames
+station_info_all = spark.read.format("delta").load(BRONZE_STATION_INFO_PATH)
+station_status_all = spark.read.format("delta").load(BRONZE_STATION_STATUS_PATH)
+weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
+
+
+# COMMAND ----------
+
+df = spark.read.csv("dbfs:/FileStore/tables/raw/weather/", header=True, inferSchema=True)
+
+# COMMAND ----------
+
+df.count()
+
+# COMMAND ----------
+
+display(bike_trip_data)
+
+# COMMAND ----------
+
+df=bike_trip_data
+
+# COMMAND ----------
+
+merge_df = bike_trip_data.withColumnRenamed("started_at", "datetime")
+
+# COMMAND ----------
+
+display(merge_df)
+
+# COMMAND ----------
+
+from pyspark.sql import SparkSession
+
+# COMMAND ----------
+
+df = spark.read.csv("dbfs:/FileStore/tables/raw/bike_trips/", header=True, inferSchema=True)
+
+# COMMAND ----------
+
+col = df.select("start_station_name")
+
+# COMMAND ----------
+
 raw_df = spark.read.csv("dbfs:/FileStore/tables/raw/bike_trips/", header=True, inferSchema=True)
 raw_df = raw_df.filter((raw_df.start_station_name == GROUP_STATION_ASSIGNMENT)|(raw_df.end_station_name == GROUP_STATION_ASSIGNMENT))
 
@@ -74,11 +140,13 @@ pandas_df = agg_df_month.toPandas()
 plt.plot(pandas_df["year_month"], pandas_df["num_rides"])
 plt.xlabel("month")
 plt.xticks(rotation = 90)
+6
 plt.ylabel("Number of Rides")
 plt.title("Monthly Bike Rides")
 plt.show()
 
 # COMMAND ----------
+
 
 import matplotlib.pyplot as plt
 from pyspark.sql.functions import collect_list
@@ -113,6 +181,8 @@ plt.show()
 
 import matplotlib.pyplot as plt
 from pyspark.sql.functions import collect_list
+
+# COMMAND ----------
 
 # create a DataFrame with aggregated data
 agg_data = agg_df.groupBy("year", "month", "year_month", "rideable_type").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
@@ -225,6 +295,7 @@ electric_num_rides = [int(row.num_rides) for row in electric_data.select("num_ri
 docked_num_rides = [int(row.num_rides) for row in docked_data.select("num_rides").collect()]
 
 
+
 plt.plot(year_month_day, classic_num_rides, label="classic")
 plt.plot(year_month_day, electric_num_rides, label="electric")
 plt.plot(year_month_day, docked_num_rides, label="dock")
@@ -237,12 +308,62 @@ plt.xticks(rotation = 90)
 plt.title("Classic vs. Electric vs. Dock Bike")
 plt.legend()
 
+
 # show the plot
 plt.show()
 
 # COMMAND ----------
 
-import json
+
+# Q3
+import pandas as pd
+from pyspark.sql.functions import *
+from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
+
+
+dates = pd.DataFrame({'datetime':pd.date_range('2021-11-01', '2023-02-28')})
+#dates['date']=dates['date']
+#df = pd.DataFrame()
+#df['Date'] = dr
+
+cal = calendar()
+holidays = cal.holidays(start=dates["datetime"].min(), end=dates["datetime"].max())
+#holidays.dt.date
+dates["Holiday"] = dates["datetime"].isin(holidays)
+dates["Date"]=dates["datetime"].dt.date
+dates["Hol_Non_Hol"]=dates['Holiday'].map({True:"Holiday" ,False:"Non-Holiday"})
+dates=dates.drop(["Holiday","datetime"],axis=1)
+display(dates)
+
+# COMMAND ----------
+
+from pyspark.sql import SparkSession
+#Create PySpark SparkSession
+spark = SparkSession.builder \
+    .master("local[1]") \
+    .appName("SparkByExamples.com") \
+    .getOrCreate()
+#Create PySpark DataFrame from Pandas
+dates=spark.createDataFrame(dates) 
+dates.show()
+
+# COMMAND ----------
+
+#.orderBy("member_casual","rideable_type","Hol_Non_Hol","num_rides")
+df_hol=df[["rideable_type","member_casual","ride_id","started_at"]]
+df_hol=df_hol.withColumn("date",to_date("started_at"))
+
+df_hol_v1=df_hol.join(dates,df_hol.date == dates.Date,"inner").select("rideable_type","member_casual","Hol_Non_Hol","started_at","ride_id",df_hol.date)
+df_hol_v1
+agg_hol = df_hol_v1.groupBy("rideable_type", "member_casual", "Hol_Non_Hol","date").agg({"ride_id":"count"}).withColumnRenamed("count(ride_id)","num_rides")
+display(agg_hol)
+
+# COMMAND ----------
+
+agg_hol_v1=agg_hol.groupBy("rideable_type", "member_casual", "Hol_Non_Hol").agg({"num_rides":"mean"}).withColumnRenamed("average(num_rides)","avg_rides").orderBy("rideable_type","member_casual","Hol_Non_Hol")
+display(agg_hol_v1)
+
+# COMMAND ----------
 
 # Return Success
 dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
