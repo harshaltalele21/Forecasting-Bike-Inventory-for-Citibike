@@ -45,7 +45,7 @@ agg_df = df.groupBy("year","month","day","rideable_type","member_casual")\
                           .orderBy("year","month","day")
 agg_df = agg_df.withColumn("year_month", concat_ws("_","year","month"))
 agg_df = agg_df.withColumn("year_month_day", concat_ws("_","year_month","day"))
-agg_df.show(10)
+display(agg_df.head(2))
 
 # COMMAND ----------
 
@@ -54,7 +54,7 @@ agg_df_month = agg_df.groupBy("year","month")\
                           .withColumnRenamed("sum(num_rides)","num_rides")\
                           .orderBy("year","month")
 agg_df_month = agg_df_month.withColumn("year_month", concat_ws("_","year","month"))
-agg_df_month.show()
+display(agg_df_month.head(2))
 
 # COMMAND ----------
 
@@ -62,7 +62,7 @@ agg_df_day = agg_df.groupBy("year","month","day","year_month_day")\
                           .agg({"num_rides":"sum"})\
                           .withColumnRenamed("sum(num_rides)","num_rides")\
                           .orderBy("year","month","day","year_month_day")
-agg_df_day.show(10)
+display(agg_df_day.head(2))
 
 # COMMAND ----------
 
@@ -157,7 +157,7 @@ pandas_df = agg_df_dayofweek.toPandas()
 
 # plot the data using matplotlib
 plt.plot(pandas_df["day_of_week"], pandas_df["num_rides"])
-plt.xlabel("month")
+plt.xlabel("Day Of Week")
 plt.xticks(rotation = 90)
 plt.ylabel("Number of Rides")
 plt.title("Total Bike Rides - By Day of Week")

@@ -26,20 +26,22 @@ bike_trip_data = spark \
   .readStream \
   .schema(bike_for_schema.schema) \
   .option("maxFilesPerTrigger", 1) \
-  .option("complete","true") \
+  .option("append","true") \
   .csv(BIKE_TRIP_DATA_PATH)
 
 weather_data = spark \
   .readStream \
   .schema(weather_for_schema.schema) \
   .option("maxFilesPerTrigger", 1) \
-  .option("complete","true") \
+  .option("append","true") \
   .csv(NYC_WEATHER_FILE_PATH)
+
+
+# COMMAND ----------
 
 station_info_all = spark.read.format("delta").load(BRONZE_STATION_INFO_PATH)
 station_status_all = spark.read.format("delta").load(BRONZE_STATION_STATUS_PATH)
 weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
-
 
 # COMMAND ----------
 
@@ -49,7 +51,7 @@ display(station_info)
 
 # COMMAND ----------
 
-GROUP_STATION_ASSIGNMENT
+station_info_all.select("station_type").distinct().show()
 
 # COMMAND ----------
 
@@ -63,7 +65,7 @@ display(station_status)
 # Creating dynamic tables
 station_status.write.saveAsTable("G04_db.bronze_station_status_dynamic", format='delta', mode='overwrite')
 station_info.write.saveAsTable("G04_db.bronze_station_info_dynamic", format='delta', mode='overwrite')
-weather_dynamic_all.write.saveAsTable("G04_db.bronze_weather_info_dynamic", format='delta', mode='overwrite')
+weather_dynamic_all.write.partitionBy("time").option("overwriteSchema", "true").saveAsTable("G04_db.bronze_weather_info_dynamic", format='delta', mode='overwrite')
 
 # COMMAND ----------
 
@@ -72,8 +74,13 @@ display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data"))
 
 # COMMAND ----------
 
+# Show files under group file path for respective historic data sets
+display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/bike_trip_data"))
+
+# COMMAND ----------
+
 # to remove files from directory
-dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_dataweather_data/',True)
+dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_data/',True)
 
 # COMMAND ----------
 
@@ -86,36 +93,13 @@ display(spark.sql('show tables'))
 
 # COMMAND ----------
 
-# Validation
-display(spark.sql('select * from g04_db.bronze_bike_trip_historic where (end_station_name=="6 Ave & W 33 St") or \
-(start_station_name=="6 Ave & W 33 St")').limit(5))
-
-# COMMAND ----------
-
-import pandas as pd
-from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
-
-dr = pd.date_range(start='2021-11-01', end='2023-02-28')
-df = pd.DataFrame()
-df['Date'] = dr
-
-cal = calendar()
-holidays = cal.holidays(start=dr.min(), end=dr.max())
-
-df['Date']=pd.to_datetime(df["Date"]).dt.date
-df['Holiday'] = df['Date'].isin(holidays)
-display(df)
+# Get tables
+display(spark.sql('drop table bronze_weather_info_dynamic'))
 
 # COMMAND ----------
 
 # Validation# Validation
-display(spark.sql('select max(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))# Validation# Validation
 display(spark.sql('select max(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
-
-# COMMAND ----------
-
-# Validation
-display(spark.sql('select count(*) from g04_db.bronze_weather_historic'))
 
 # COMMAND ----------
 
@@ -151,8 +135,34 @@ weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronz
 
 # COMMAND ----------
 
-display(bike_stream.count())
+# Creating silver table for bike status info dynamic table
+display(spark.sql("drop table if exists silver_station_status_dynamic"))
+display(spark.sql('CREATE TABLE if not exists silver_station_status_dynamic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(last_reported) as last_reported_datetime from bronze_station_status_dynamic) as a'))
 
+# COMMAND ----------
+
+display(spark.sql("create table if not exists silver_station_status_dynamic_v1 as select *,date_format(last_reported_datetime,'EEEE') as weekday  from silver_station_status_dynamic"))
+spark.sql('drop table if exists silver_station_status_dynamic')
+spark.sql('create table if not exists silver_station_status_dynamic as select * from silver_station_status_dynamic_v1')
+spark.sql('drop table if exists silver_station_status_dynamic_v1')
+
+# COMMAND ----------
+
+# Creating silver table for weather info dynamic table
+display(spark.sql("drop table if exists silver_weather_info_dynamic"))
+display(spark.sql('create table if not exists silver_weather_info_dynamic as select temp,feels_like,pressure,humidity,dew_point,uvi,clouds,visibility,wind_speed,wind_deg,wind_gust,pop,"rain.1h",final_weather.description as weather_description,final_weather.icon as weather_icon,final_weather.id as weather_id,final_weather.main as weather_main,time, hour(time) as hourofday, day(time) as dateofmonth, dayofyear(time) as dateofyear,month(time) as monthofyr, year(time) as year from (select *,explode(weather) as final_weather from bronze_weather_info_dynamic) as a '))
+
+# COMMAND ----------
+
+display(spark.sql("create table if not exists silver_weather_info_dynamic_v1 as select *,date_format(time,'EEEE') as weekday  from silver_weather_info_dynamic"))
+spark.sql('drop table if exists silver_weather_info_dynamic')
+spark.sql('create table if not exists silver_weather_info_dynamic as select * from silver_weather_info_dynamic_v1')
+spark.sql('drop table if exists silver_weather_info_dynamic_v1')
+
+# COMMAND ----------
+
+df=spark.sql('select * from silver_weather_info_dynamic')
+display(df.head(2))
 
 # COMMAND ----------
 
