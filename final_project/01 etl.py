@@ -135,16 +135,35 @@ weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronz
 
 # COMMAND ----------
 
+ #Creating silver tables
+
+# COMMAND ----------
+
 # Creating silver table for bike status info dynamic table
 display(spark.sql("drop table if exists silver_station_status_dynamic"))
 display(spark.sql('CREATE TABLE if not exists silver_station_status_dynamic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(last_reported) as last_reported_datetime from bronze_station_status_dynamic) as a'))
 
 # COMMAND ----------
 
+# Creating silver table for bike status info dynamic table
 display(spark.sql("create table if not exists silver_station_status_dynamic_v1 as select *,date_format(last_reported_datetime,'EEEE') as weekday  from silver_station_status_dynamic"))
 spark.sql('drop table if exists silver_station_status_dynamic')
 spark.sql('create table if not exists silver_station_status_dynamic as select * from silver_station_status_dynamic_v1')
 spark.sql('drop table if exists silver_station_status_dynamic_v1')
+
+# COMMAND ----------
+
+# Creating silver table for bike trip historic table
+display(spark.sql("drop table if exists silver_bike_trip_historic"))
+display(spark.sql('CREATE TABLE if not exists silver_bike_trip_historic as select *,hour(started_at) as hourofday, day(started_at) as dateofmonth, dayofyear(started_at) as dateofyear,month(started_at) as monthofyr, year(started_at) as year from bronze_bike_trip_historic'))
+
+# COMMAND ----------
+
+# Creating silver table for bike trip historic table
+display(spark.sql("create table if not exists silver_bike_trip_historic_v1 as select *,date_format(started_at,'EEEE') as weekday  from silver_bike_trip_historic"))
+spark.sql('drop table if exists silver_bike_trip_historic')
+spark.sql('create table if not exists silver_bike_trip_historic as select * from silver_bike_trip_historic_v1')
+spark.sql('drop table if exists silver_bike_trip_historic_v1')
 
 # COMMAND ----------
 
@@ -154,6 +173,7 @@ display(spark.sql('create table if not exists silver_weather_info_dynamic as sel
 
 # COMMAND ----------
 
+# Creating silver table for weather info dynamic table
 display(spark.sql("create table if not exists silver_weather_info_dynamic_v1 as select *,date_format(time,'EEEE') as weekday  from silver_weather_info_dynamic"))
 spark.sql('drop table if exists silver_weather_info_dynamic')
 spark.sql('create table if not exists silver_weather_info_dynamic as select * from silver_weather_info_dynamic_v1')
@@ -161,8 +181,21 @@ spark.sql('drop table if exists silver_weather_info_dynamic_v1')
 
 # COMMAND ----------
 
-df=spark.sql('select * from silver_weather_info_dynamic')
-display(df.head(2))
+# Creating silver table for weather historic table
+display(spark.sql("drop table if exists silver_weather_historic"))
+display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(int(dt)) as last_reported_datetime from bronze_weather_historic) as a'))
+
+# COMMAND ----------
+
+# Creating silver table for weather historic table
+display(spark.sql("create table if not exists silver_weather_historic_v1 as select *,date_format(last_reported_datetime,'EEEE') as weekday  from silver_weather_historic"))
+spark.sql('drop table if exists silver_weather_historic')
+spark.sql('create table if not exists silver_weather_historic as select * from silver_weather_historic_v1')
+spark.sql('drop table if exists silver_weather_historic_v1')
+
+# COMMAND ----------
+
+display(spark.sql('select * from silver_weather_historic'))
 
 # COMMAND ----------
 
