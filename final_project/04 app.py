@@ -28,14 +28,17 @@ dbutils.widgets.removeAll()
 
 # COMMAND ----------
 
-Station name and a map location (marker)
-Total bikes available at this station (list the different types of bikes and whether any bikes are disabled/broken)
+display(spark.sql("select * from silver_station_status_dynamic"))
+
+# COMMAND ----------
+
 Forecast the available bikes for the next 4 hours.
 Highlight any stock out or full station conditions over the predicted period.
 Monitor the performance of your staging and production models using an appropriate residual plot that illustrates the error in your forecasts.  
 
 # COMMAND ----------
 
+# DBTITLE 1,City Bike Station Trip Data & Current Weather
 import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
@@ -70,7 +73,7 @@ rows = [["Current Time",str(current_weather.select("current_time").collect()[0][
 ["Bikes Available",str(bike_station.select("num_bikes_available").collect()[0][0])],
 ["Bikes Disabled",str(bike_station.select("num_bikes_disabled").collect()[0][0])],
 ["Docks Disabled",str(bike_station.select("num_docks_disabled").collect()[0][0])]]
-columns = ['Value','Category']
+columns = ['Category','Value']
  
 # Creating the DataFrame
 second_df = spark_session.createDataFrame(rows, columns)
@@ -80,11 +83,40 @@ display(first_df)
 
 # COMMAND ----------
 
-display(spark.sql("select num_ebikes_available,num_docks_available,num_scooters_available,num_bikes_available,num_bikes_disabled,num_docks_disabled from silver_station_status_dynamic "))
+# DBTITLE 1,Interactive Map to show station location and name
+import folium
+# Plot Gaussian means (cluster centers):
+center_map = folium.Map(location=[40.74901271, -73.98848395], zoom_start=13,title="Tanvi")
+iframe = folium.IFrame(GROUP_STATION_ASSIGNMENT, width=150, height=25)
+folium.Marker(location =[40.74901271, -73.98848395],fill_color='#43d9de').add_child(folium.Popup(iframe)).add_to(center_map)
+
+html_string = center_map._repr_html_()
+
+# Display the map 
+displayHTML(html_string)
+
 
 # COMMAND ----------
 
-display(spark.sql("show tables"))
+# DBTITLE 1,Read weather dynamic table to get the forecasted weather data
+forecasted_weather=spark.sql("select temp,time from silver_weather_info_dynamic where monthofyr=4 and dateofmonth between 28 and 29 ")
+display(forecasted_weather.count())
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Forecast no of bikes for the next 4 hours 
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Insert forecasted data to gold table
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Use actual data from bike station info silver tables and create residuals
+
 
 # COMMAND ----------
 
