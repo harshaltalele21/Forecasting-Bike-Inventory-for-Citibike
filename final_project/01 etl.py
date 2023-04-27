@@ -181,6 +181,10 @@ spark.sql('drop table if exists silver_weather_info_dynamic_v1')
 
 # COMMAND ----------
 
+display(spark.sql('desc silver_weather_info_dynamic'))
+
+# COMMAND ----------
+
 # Creating silver table for weather historic table
 display(spark.sql("drop table if exists silver_weather_historic"))
 display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(int(dt)) as last_reported_datetime from bronze_weather_historic) as a'))
