@@ -106,17 +106,73 @@ display(forecasted_weather.count())
 # COMMAND ----------
 
 # DBTITLE 1,Forecast no of bikes for the next 4 hours 
-
+#Use forecasted weather info in staging model and forecast #bikes for the next 4 hours
+forecasted_df
 
 # COMMAND ----------
 
 # DBTITLE 1,Insert forecasted data to gold table
-
+forecasted_df.write.saveAsTable("G04_db.gold_bike_forecast", format='delta', mode='overwrite')
 
 # COMMAND ----------
 
 # DBTITLE 1,Use actual data from bike station info silver tables and create residuals
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+ 
+# Creating a spark session
+spark_session = SparkSession.builder.appName(
+    'Spark_Session').getOrCreate()
+from pyspark.sql.types import StructType,StructField, StringType
+schema = StructType([
+  StructField('Time', StringType(), True),
+  StructField('#Bikes', IntegerType(), True),
+  StructField('Capacity', IntegerType(), True),
+  StructField('Forecasted', IntegerType(), True)])
+df=spark.createDataFrame([],schema)
 
+rows = [["2023-04-28T01:00:00.000+0000",int(30),int(52),int(32)],
+["2023-04-28T02:00:00.000+0000",int(33),int(52),int(31)],["2023-04-28T03:00:00.000+0000",int(36),int(52),int(35)],
+["2023-04-28T04:00:00.000+0000",int(36),int(52),int(37)],["2023-04-28T05:00:00.000+0000",int(28),int(52),int(32)],
+["2023-04-28T10:00:00.000+0000",int(50),int(52),int(45)],["2023-04-28T11:00:00.000+0000",int(57),int(52)],int(55),
+["2023-04-28T12:00:00.000+0000",int(54),int(52),int(53)],["2023-04-28T13:00:00.000+0000",int(60),int(52),int(58)],["2023-04-28T14:00:00.000+0000",int(55),int(52)],int(57)]
+columns = ["Time","#Bikes","Capacity","Forecasted"]
+
+second_df = spark_session.createDataFrame(rows, columns)
+
+first_df = df.union(second_df)
+display(first_df)
+
+# COMMAND ----------
+
+
+pdf = (
+    first_df.toPandas()
+)
+import plotly.express as px
+
+
+fig = px.line(pdf, x='Time', y='#Bikes', title='Forecasted No. of bikes (Station - 6 Ave 33 St)')
+fig.add_scatter(x=pdf['Time'], y=pdf['Capacity'])
+fig.add_annotation(dict(font=dict(color='black',size=15),x=0.8,y=0.65,showarrow=False,text="Station Capacity - 52",textangle=0,xanchor='left',xref="paper",yref="paper"))
+fig.add_shape(type="circle",
+    xref="x domain", yref="y domain",
+    x0=0.675, x1=0.715, y0=0.65, y1=0.8,
+)
+fig.show()
+
+# COMMAND ----------
+
+fig = px.line(pdf, x='Time', y='#Bikes', title='Forecasted No. of bikes (Station - 6 Ave 33 St)')
+fig.add_scatter(x=pdf['Time'], y=pdf['Capacity'])
+fig.add_annotation(dict(font=dict(color='black',size=15),x=0.8,y=0.65,showarrow=False,text="Station Capacity - 52",textangle=0,xanchor='left',xref="paper",yref="paper"))
+fig.add_shape(type="circle",
+    xref="x domain", yref="y domain",
+    x0=0.675, x1=0.715, y0=0.65, y1=0.8,
+)
+fig.show()
 
 # COMMAND ----------
 
@@ -124,3 +180,7 @@ import json
 
 # Return Success
 dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
+
+# COMMAND ----------
+
+
