@@ -156,12 +156,23 @@ fig.show()
 
 # COMMAND ----------
 
+#results=forecast[['ds','yhat']].join(sales_data, lsuffix='_caller', rsuffix='_other')
+#results['residual'] = results['yhat'] - results['y']
+
 
 fig = px.scatter(
     pdf, x='Forecasted',y='#Bikes',opacity=0.65,title='Forecast Model Performance Comparison (Station - 6 Ave & W 33 St)',
-    trendline='ols', trendline_color_override='darkblue'
+    trendline='ols', trendline_color_override='darkblue',marginal_y='violin'
 )
 fig.show()
+
+#plot the residuals
+#fig = px.scatter(
+#    results, x='yhat', y='residual',
+#    marginal_y='violin',
+#    trendline='ols',
+#)
+#fig.show()
 
 # COMMAND ----------
 
