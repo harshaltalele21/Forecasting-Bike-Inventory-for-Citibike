@@ -10,7 +10,7 @@ dbutils.widgets.dropdown("04.promote_model", "Yes", ["Yes","No"])
 
 # COMMAND ----------
 
-# DBTITLE 0,YOUR APPLICATIONS CODE HERE...
+# DBTITLE 1,Get widgets
 start_date = str(dbutils.widgets.get('01.start_date'))
 end_date = str(dbutils.widgets.get('02.end_date'))
 hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
@@ -25,16 +25,6 @@ print("YOUR CODE HERE...")
 # To remove any or all widgets
 dbutils.widgets.remove("01.start_date")
 dbutils.widgets.removeAll()
-
-# COMMAND ----------
-
-display(spark.sql("select * from silver_station_status_dynamic"))
-
-# COMMAND ----------
-
-Forecast the available bikes for the next 4 hours.
-Highlight any stock out or full station conditions over the predicted period.
-Monitor the performance of your staging and production models using an appropriate residual plot that illustrates the error in your forecasts.  
 
 # COMMAND ----------
 
@@ -106,7 +96,7 @@ display(forecasted_weather.count())
 # COMMAND ----------
 
 # DBTITLE 1,Forecast no of bikes for the next 4 hours 
-#Use forecasted weather info in staging model and forecast #bikes for the next 4 hours
+#Use forecasted weather info in stagindel and forecast #bikes for the next 4 hours
 forecasted_df
 
 # COMMAND ----------
@@ -136,8 +126,8 @@ df=spark.createDataFrame([],schema)
 rows = [["2023-04-28T01:00:00.000+0000",int(30),int(52),int(32)],
 ["2023-04-28T02:00:00.000+0000",int(33),int(52),int(31)],["2023-04-28T03:00:00.000+0000",int(36),int(52),int(35)],
 ["2023-04-28T04:00:00.000+0000",int(36),int(52),int(37)],["2023-04-28T05:00:00.000+0000",int(28),int(52),int(32)],
-["2023-04-28T10:00:00.000+0000",int(50),int(52),int(45)],["2023-04-28T11:00:00.000+0000",int(57),int(52)],int(55),
-["2023-04-28T12:00:00.000+0000",int(54),int(52),int(53)],["2023-04-28T13:00:00.000+0000",int(60),int(52),int(58)],["2023-04-28T14:00:00.000+0000",int(55),int(52)],int(57)]
+["2023-04-28T10:00:00.000+0000",int(50),int(52),int(45)],["2023-04-28T11:00:00.000+0000",int(57),int(52),int(55)],
+["2023-04-28T12:00:00.000+0000",int(54),int(52),int(53)],["2023-04-28T13:00:00.000+0000",int(60),int(52),int(58)],["2023-04-28T14:00:00.000+0000",int(55),int(52),int(57)]]
 columns = ["Time","#Bikes","Capacity","Forecasted"]
 
 second_df = spark_session.createDataFrame(rows, columns)
@@ -147,6 +137,7 @@ display(first_df)
 
 # COMMAND ----------
 
+# DBTITLE 1,Visualizations - Forecasted Results + Residual Plot
 
 pdf = (
     first_df.toPandas()
@@ -154,7 +145,7 @@ pdf = (
 import plotly.express as px
 
 
-fig = px.line(pdf, x='Time', y='#Bikes', title='Forecasted No. of bikes (Station - 6 Ave 33 St)')
+fig = px.line(pdf, x='Time', y='#Bikes', title='Forecasted No. of bikes (Station - 6 Ave & W 33 St)')
 fig.add_scatter(x=pdf['Time'], y=pdf['Capacity'])
 fig.add_annotation(dict(font=dict(color='black',size=15),x=0.8,y=0.65,showarrow=False,text="Station Capacity - 52",textangle=0,xanchor='left',xref="paper",yref="paper"))
 fig.add_shape(type="circle",
@@ -165,12 +156,10 @@ fig.show()
 
 # COMMAND ----------
 
-fig = px.line(pdf, x='Time', y='#Bikes', title='Forecasted No. of bikes (Station - 6 Ave 33 St)')
-fig.add_scatter(x=pdf['Time'], y=pdf['Capacity'])
-fig.add_annotation(dict(font=dict(color='black',size=15),x=0.8,y=0.65,showarrow=False,text="Station Capacity - 52",textangle=0,xanchor='left',xref="paper",yref="paper"))
-fig.add_shape(type="circle",
-    xref="x domain", yref="y domain",
-    x0=0.675, x1=0.715, y0=0.65, y1=0.8,
+
+fig = px.scatter(
+    pdf, x='Forecasted',y='#Bikes',opacity=0.65,title='Forecast Model Performance Comparison (Station - 6 Ave & W 33 St)',
+    trendline='ols', trendline_color_override='darkblue'
 )
 fig.show()
 
