@@ -3,20 +3,6 @@
 
 # COMMAND ----------
 
-start_date = str(dbutils.widgets.get('01.start_date'))
-end_date = str(dbutils.widgets.get('02.end_date'))
-hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
-promote_model = bool(True if str(dbutils.widgets.get('04.promote_model')).lower() == 'yes' else False)
-
-print(start_date,end_date,hours_to_forecast, promote_model)
-print("YOUR CODE HERE...")
-
-# COMMAND ----------
-
-https://github.com/harshaltalele21/G04-final-project
-
-# COMMAND ----------
-
 !pip install fbprophet
 
 # COMMAND ----------
@@ -27,8 +13,42 @@ from fbprophet import Prophet
 
 # COMMAND ----------
 
+target_data=spark.sql("select * from target_variable")
+display(target_data.head(2))
+
+# COMMAND ----------
+
+target_df = target_data.toPandas()
+
+# COMMAND ----------
+
+display(target_df)
+
+# COMMAND ----------
+
+# Combine year, month, and date columns to create a datetime column
+target_df['datetime'] = target_df.apply(lambda x: pd.to_datetime(f"{x['dateofmonth_sa']}-{x['monthofyr_sa']}-{x['year_sa']}", format="%d-%m-%Y"), axis=1)
+
+# Print the updated dataframe
+display(target_df)
+
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col
+
+# COMMAND ----------
+
+# group by date and calculate average net change
+
+df_grouped = target_df.groupby("datetime").agg({"netchange": "mean"}).reset_index()
+df_grouped = df_grouped.rename(columns={"datetime": "ds", "netchange": "y"})
+display(df_grouped)
+
+# COMMAND ----------
+
 # Read in the silver table data
-bike_df = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/bike_trip_data")
+#bike_df = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/bike_trip_data")
 
 #dbfs:/FileStore/tables/G04/bike_trip_data
 
@@ -61,7 +81,7 @@ model = Prophet()
 # COMMAND ----------
 
 # Fit the model to the data
-model.fit(agg_df)
+model.fit(df_grouped)
 
 # COMMAND ----------
 
@@ -73,6 +93,14 @@ forecast = model.predict(future)
 
 # Show the forecasted values
 display(forecast)
+
+# COMMAND ----------
+
+df_grouped.count()
+
+# COMMAND ----------
+
+fig1 = model.plot(forecast)
 
 # COMMAND ----------
 

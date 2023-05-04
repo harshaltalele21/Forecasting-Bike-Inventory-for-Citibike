@@ -3,17 +3,6 @@
 
 # COMMAND ----------
 
-start_date = str(dbutils.widgets.get('01.start_date'))
-end_date = str(dbutils.widgets.get('02.end_date'))
-hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
-promote_model = bool(True if str(dbutils.widgets.get('04.promote_model')).lower() == 'yes' else False)
-
-#print(start_date,end_date,hours_to_forecast, promote_model)
-#print("YOUR CODE HERE...")
-
-
-# COMMAND ----------
-
 
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -93,13 +82,8 @@ display(spark.sql('show tables'))
 
 # COMMAND ----------
 
-# Get tables
-display(spark.sql('drop table bronze_weather_info_dynamic'))
-
-# COMMAND ----------
-
-# Validation# Validation
-display(spark.sql('select max(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
+# Validation
+display(spark.sql('select min(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
 
 # COMMAND ----------
 
@@ -155,12 +139,12 @@ spark.sql('drop table if exists silver_station_status_dynamic_v1')
 
 # Creating silver table for bike trip historic table
 display(spark.sql("drop table if exists silver_bike_trip_historic"))
-display(spark.sql('CREATE TABLE if not exists silver_bike_trip_historic as select *,hour(started_at) as hourofday, day(started_at) as dateofmonth, dayofyear(started_at) as dateofyear,month(started_at) as monthofyr, year(started_at) as year from bronze_bike_trip_historic'))
+display(spark.sql('CREATE TABLE if not exists silver_bike_trip_historic as select *,hour(started_at) as hourofday_sa, day(started_at) as dateofmonth_sa, dayofyear(started_at) as dateofyear_sa,month(started_at) as monthofyr_sa, year(started_at) as year_sa,hour(ended_at) as hourofday_ea, day(ended_at) as dateofmonth_ea, dayofyear(ended_at) as dateofyear_ea,month(ended_at) as monthofyr_ea, year(ended_at) as year_ea from (select * from bronze_bike_trip_historic where started_at!="started_at")'))
 
 # COMMAND ----------
 
 # Creating silver table for bike trip historic table
-display(spark.sql("create table if not exists silver_bike_trip_historic_v1 as select *,date_format(started_at,'EEEE') as weekday  from silver_bike_trip_historic"))
+display(spark.sql("create table if not exists silver_bike_trip_historic_v1 as select *,date_format(started_at,'EEEE') as weekday_startdate,date_format(ended_at,'EEEE') as weekday_enddate  from silver_bike_trip_historic"))
 spark.sql('drop table if exists silver_bike_trip_historic')
 spark.sql('create table if not exists silver_bike_trip_historic as select * from silver_bike_trip_historic_v1')
 spark.sql('drop table if exists silver_bike_trip_historic_v1')
@@ -169,7 +153,7 @@ spark.sql('drop table if exists silver_bike_trip_historic_v1')
 
 # Creating silver table for weather info dynamic table
 display(spark.sql("drop table if exists silver_weather_info_dynamic"))
-display(spark.sql('create table if not exists silver_weather_info_dynamic as select temp,feels_like,pressure,humidity,dew_point,uvi,clouds,visibility,wind_speed,wind_deg,wind_gust,pop,"rain.1h",final_weather.description as weather_description,final_weather.icon as weather_icon,final_weather.id as weather_id,final_weather.main as weather_main,time, hour(time) as hourofday, day(time) as dateofmonth, dayofyear(time) as dateofyear,month(time) as monthofyr, year(time) as year from (select *,explode(weather) as final_weather from bronze_weather_info_dynamic) as a '))
+display(spark.sql('create table if not exists silver_weather_info_dynamic as select a.*,final_weather.description as weather_description,final_weather.icon as weather_icon,final_weather.id as weather_id,final_weather.main as weather_main, hour(time) as hourofday, day(time) as dateofmonth, dayofyear(time) as dateofyear,month(time) as monthofyr, year(time) as year from (select *,explode(weather) as final_weather from bronze_weather_info_dynamic) as a '))
 
 # COMMAND ----------
 
@@ -183,7 +167,7 @@ spark.sql('drop table if exists silver_weather_info_dynamic_v1')
 
 # Creating silver table for weather historic table
 display(spark.sql("drop table if exists silver_weather_historic"))
-display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(int(dt)) as last_reported_datetime from bronze_weather_historic) as a'))
+display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(int(dt)) as last_reported_datetime from bronze_weather_historic where dt!="dt") as a'))
 
 # COMMAND ----------
 
@@ -195,7 +179,32 @@ spark.sql('drop table if exists silver_weather_historic_v1')
 
 # COMMAND ----------
 
-display(spark.sql('select * from silver_weather_historic'))
+display(spark.sql('select * from silver_weather_historic '))  
+
+# COMMAND ----------
+
+# Checking count of rows in each silver table
+display(spark.sql('select "silver_bike_trip_historic" as tablename,count(*) as rows from silver_bike_trip_historic union select "silver_station_status_dynamic" as tablename,count(*) as rows from silver_station_status_dynamic union select "silver_weather_historic" as tablename,count(*) as rows from silver_weather_historic union select "silver_weather_info_dynamic" as tablename,count(*) as rows from silver_weather_info_dynamic'))
+
+
+# COMMAND ----------
+
+display(spark.sql('drop table if exists target_variable'))
+display(spark.sql('create table if not exists target_variable as select a.year_sa,a.monthofyr_sa,a.dateofmonth_sa,a.hourofday_sa,coalesce(a.rides_started,0) as rides_started,coalesce(b.rides_ended,0) as rides_ended,(coalesce(b.rides_ended,0)-coalesce(a.rides_started,0)) as netchange from (select year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa,count(distinct ride_id) as rides_started from silver_bike_trip_historic where start_station_name="6 Ave & W 33 St"  and started_at<="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa) as a full outer join (select year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea,count(distinct ride_id) as rides_ended from silver_bike_trip_historic where end_station_name="6 Ave & W 33 St" and started_at="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea) as b on a.year_sa=b.year_ea and a.monthofyr_sa=b.monthofyr_ea and a.dateofmonth_sa=b.dateofmonth_ea and a.hourofday_sa=b.hourofday_ea'))  
+
+# COMMAND ----------
+
+display(spark.sql('select * from target_variable limit 5 '))  
+
+# COMMAND ----------
+
+# Validation - Checking target variable data for model training 
+display(spark.sql('select * from silver_bike_trip_historic where (start_station_name="6 Ave & W 33 St" or end_station_name="6 Ave & W 33 St") and year_sa=2021 and monthofyr_sa=11 and dateofmonth_sa=1 and (hourofday_sa=0 or hourofday_ea=0) and year_ea=2021 and monthofyr_ea=11 and dateofmonth_ea=1'))
+
+# COMMAND ----------
+
+#Validation - No null records
+display(spark.sql('select * from target_variable where netchange IS NULL'))
 
 # COMMAND ----------
 
