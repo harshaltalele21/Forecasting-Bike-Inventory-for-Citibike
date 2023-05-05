@@ -119,51 +119,43 @@ display(agg_df_day.head(2))
 pandas_agg_df = agg_df_month.toPandas()
 year_month=pandas_agg_df["year_month"]
 num_rides=pandas_agg_df["num_rides"]
-
-
 df_monthly_rides = pd.DataFrame({'year_month': year_month, 'num_rides': num_rides})
-
 fig = px.line(df_monthly_rides, x='year_month', y='num_rides', title='Monthly Bike Rides')
-
-
 fig.show()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC We see that the number of rides are highest in the months of June, July, August and September. It peaks in August where the number of rides are 24.959k.
+
+# COMMAND ----------
+
 # DBTITLE 1,Number of Rides by Member Type
-
-# create a DataFrame with aggregated data
 agg_data = agg_df.groupBy("year", "month", "year_month", "member_casual").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
-
-# filter for member_casual data
 member_data = agg_data.filter(agg_df.member_casual == "member").orderBy("year_month")
-
-# filter for casual data
 casual_data = agg_data.filter(agg_df.member_casual == "casual").orderBy("year_month")
-
 year_month = [str(row.year_month) for row in member_data.select("year_month").collect()]
 member_num_rides = [int(row.num_rides) for row in member_data.select("num_rides").collect()]
 casual_num_rides = [int(row.num_rides) for row in casual_data.select("num_rides").collect()]
-# Convert the lists to a Pandas dataframe
 df_member_type = pd.DataFrame({'year_month': year_month, 'member_num_rides': member_num_rides, 'casual_num_rides': casual_num_rides})
-
-# Use Plotly Express to plot the data as line graphs
 fig = px.line(df_member_type, x='year_month', y=['member_num_rides', 'casual_num_rides'], title='Number of Rides by Member Type')
 fig.update_layout(
     yaxis_title="Count",
     xaxis_title="Year_month"
 )
-# Show the plot
 fig.show()
 
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC We see that members account for a higher percentage of rides. In August 2022, members accounted for 19k rides whereas casual members accounted only for 5948 rides.
+
+# COMMAND ----------
+
 # DBTITLE 1,Classic vs. Electric vs. Dock Bike
-# create a DataFrame with aggregated data
 agg_data = agg_df.groupBy("year", "month", "year_month", "rideable_type").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
 
-# filter for member_casual data
 classic_data = agg_data.filter(agg_df.rideable_type == "classic_bike").orderBy("year_month")
 electric_data = agg_data.filter(agg_df.rideable_type == "electric_bike").orderBy("year_month")
 docked_data = agg_data.filter(agg_df.rideable_type == "docked_bike").orderBy("year_month")
@@ -175,15 +167,20 @@ electric_num_rides = [int(row.num_rides) for row in electric_data.select("num_ri
 docked_num_rides = [int(row.num_rides) for row in docked_data.select("num_rides").collect()]
 
 
-# Convert the lists to a Pandas dataframe
 df_ride_type = pd.DataFrame({'year_month': year_month, 'classic_num_rides': classic_num_rides, 'electric_num_rides': electric_num_rides,'docked_num_rides':docked_num_rides})
 
-# Use Plotly Express to plot the data as line graphs
 fig = px.line(df_ride_type, x='year_month', y=['classic_num_rides', 'electric_num_rides','docked_num_rides'], title='Classic vs. Electric vs. Dock Bike')
-
-# Show the plot
+fig.update_layout(
+    yaxis_title="Count",
+    xaxis_title="Year_month"
+)
 fig.show()
 
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC We see that classic bikes contribute the most to the number of bike rides. They form 82% of the total number of rides in August.
 
 # COMMAND ----------
 
@@ -196,19 +193,27 @@ agg_df_dayofweek = df.groupBy("day_of_week")\
 pandas_df_dayofweek = agg_df_dayofweek.toPandas()
 day_of_week=pandas_df_dayofweek["day_of_week"]
 num_rides=pandas_df_dayofweek["num_rides"]
-# Convert the lists to a Pandas dataframe
+
 df_day_of_week = pd.DataFrame({'num_rides': num_rides, 'day_of_week': day_of_week})
 
-# Use Plotly Express to plot the data as line graphs
 fig = px.line(df_day_of_week, x=day_of_week, y=num_rides, title='Total Bike Rides - By Day of Week')
+fig.update_layout(
+    yaxis_title="Count",
+    xaxis_title="Day of week"
+)
 
-# Show the plot
 fig.show()
 
 
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC The highest number of rides are on Wednesday followed by Thursday.
+
+# COMMAND ----------
+
+# DBTITLE 1,Trend of Daily Bike Rides
 pandas_df_day = agg_df_day.toPandas()
 fig = px.line(pandas_df_day, x="year_month_day", y="num_rides", title='Daily Bike Rides',
                 labels = {
@@ -281,10 +286,15 @@ fig.show()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC We can clearly see that the rides are used for regular commute more and not on Holidays. It has a median of 575.
+
+# COMMAND ----------
+
 # weather_df = weather_data.toPandas()
 # weather_df.drop(index=0)
 # display(weather_df.head(2))
-display(weather_data)
+#display(weather_data)
 
 # COMMAND ----------
 
@@ -334,11 +344,12 @@ display(weather_agg.head(10))
 # COMMAND ----------
 
 fig = px.bar(weather_agg.toPandas(), x="main", color_discrete_map={
-        'main': 'blue'
-        # 'some_other_group': 'green'
+        'main': 'red'
+        # 'some_other_group': 'red'
     })
-fig.update_traces(marker_color='green')
+fig.update_traces(marker_color='red')
 fig.show()
+
 
 # COMMAND ----------
 
