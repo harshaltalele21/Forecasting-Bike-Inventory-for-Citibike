@@ -95,18 +95,53 @@ display(forecasted_weather.count())
 
 # COMMAND ----------
 
-# DBTITLE 1,Forecast no of bikes for the next 4 hours 
-#Use forecasted weather info in stagindel and forecast #bikes for the next 4 hours
-forecasted_df
+# DBTITLE 1,Load registered model from Production/Staging
+model_staging_uri = "models:/{model_name}/production".format(model_name=ARTIFACT_PATH)
+
+print("Loading registered model version from URI: '{model_uri}'".format(model_uri=model_staging_uri))
+
+model_staging = mlflow.prophet.load_model(model_staging_uri)
+
+# COMMAND ----------
+
+# DBTITLE 1,Forecast for next 4 hours
+forecasted_df=model_staging.predict(model_staging.make_future_dataframe(4, freq="h"))
+model_staging.plot(model_staging.predict(model_staging.make_future_dataframe(4, freq="h")))
+
+# COMMAND ----------
+
+# DBTITLE 1,Picking the forecasted data from Apr 1'2023 onwards and creating residuals
+forecast['ds_date'] = forecast['ds'].apply(lambda x: x.date())
+
+forecast['ds_date'] = pd.to_datetime(forecast['ds_date'], errors='coerce')
+forecast_residual = forecast[forecast['ds_date'] > "2023-03-31"]
+forecast_residual.shape
+
+forecast_v1=forecast_residual.merge(df1[['ds','netchange']],how='left',on='ds')
+display(forecast_v1.head(10))
+
+#results=forecast[['ds','yhat']].join(df1, lsuffix='_caller', rsuffix='_other')
+forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
 
 # COMMAND ----------
 
 # DBTITLE 1,Insert forecasted data to gold table
-forecasted_df.write.saveAsTable("G04_db.gold_bike_forecast", format='delta', mode='overwrite')
+forecast_v1.write.saveAsTable("G04_db.gold_bike_forecast", format='delta', mode='overwrite')
 
 # COMMAND ----------
 
-# DBTITLE 1,Use actual data from bike station info silver tables and create residuals
+# DBTITLE 1,Use actual data created in ML notebook using bike station info silver tables
+
+df1=spark.sql("select *,(num_bikes_available-lag_num_bikes_available) as netchange from actual_data_forecast")
+display(df1.head(2))
+
+df1=df1.toPandas()
+df1['ds'] = df1.apply(lambda x: pd.to_datetime(f"{x['dateofmonth']}-{x['monthofyr']}-{x['year']}-{x['hourofday']}", format="%d-%m-%Y-%H"), axis=1)
+display(df1.head(2))
+
+# COMMAND ----------
+
+# DBTITLE 1,Dummy - Use actual data from bike station info silver tables and create residuals
 import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
@@ -156,19 +191,15 @@ fig.show()
 
 # COMMAND ----------
 
-#results=forecast[['ds','yhat']].join(sales_data, lsuffix='_caller', rsuffix='_other')
-#results['residual'] = results['yhat'] - results['y']
-
-
+import plotly.express as px
 fig = px.scatter(
-    pdf, x='Forecasted',y='#Bikes',opacity=0.65,title='Forecast Model Performance Comparison (Station - 6 Ave & W 33 St)',
+    forecast_v1, x='yhat',y='residual',opacity=0.65,title='Forecast Model Performance Comparison (Station - 6 Ave & W 33 St)',
     trendline='ols', trendline_color_override='darkblue',marginal_y='violin'
 )
 fig.show()
 
-#plot the residuals
 #fig = px.scatter(
-#    results, x='yhat', y='residual',
+#    forecast_v1, x='yhat', y='residual',
 #    marginal_y='violin',
 #    trendline='ols',
 #)

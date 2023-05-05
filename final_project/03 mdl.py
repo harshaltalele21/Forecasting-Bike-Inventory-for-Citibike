@@ -277,6 +277,7 @@ client = MlflowClient()
 
 # COMMAND ----------
 
+# DBTITLE 1,Transitioning model to next stage
 client.transition_model_version_stage(
 
   name=model_details.name,
@@ -289,6 +290,7 @@ client.transition_model_version_stage(
 
 # COMMAND ----------
 
+# DBTITLE 1,Check current model stage
 model_version_details = client.get_model_version(
   name=model_details.name,
   version=model_details.version,
@@ -297,15 +299,19 @@ print("The current model stage is: '{stage}'".format(stage=model_version_details
 
 # COMMAND ----------
 
+# DBTITLE 1,Check latest staging version for Production/Staging
 latest_version_info = client.get_latest_versions(ARTIFACT_PATH, stages=["Production"])
 
-latest_staging_version = latest_version_info[0].version
-
-print("The latest staging version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_staging_version))
+latest_production_version = latest_version_info[0].version
+#latest_staging_version = latest_version_info[1].version
+print(latest_version_info)
+print("The latest production version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_production_version))
+#print("The latest staging version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_staging_version))
 
 # COMMAND ----------
 
-model_staging_uri = "models:/{model_name}/staging".format(model_name=ARTIFACT_PATH)
+# DBTITLE 1,Load registered model from Production/Staging
+model_staging_uri = "models:/{model_name}/production".format(model_name=ARTIFACT_PATH)
 
 print("Loading registered model version from URI: '{model_uri}'".format(model_uri=model_staging_uri))
 
@@ -313,7 +319,7 @@ model_staging = mlflow.prophet.load_model(model_staging_uri)
 
 # COMMAND ----------
 
-display(model_staging.version)
+model_staging.plot(model_staging.predict(model_staging.make_future_dataframe(36, freq="h")))
 
 # COMMAND ----------
 
