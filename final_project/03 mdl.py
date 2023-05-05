@@ -27,7 +27,7 @@ display(target_df)
 # COMMAND ----------
 
 # Combine year, month, and date columns to create a datetime column
-target_df['datetime'] = target_df.apply(lambda x: pd.to_datetime(f"{x['dateofmonth_sa']}-{x['monthofyr_sa']}-{x['year_sa']}", format="%d-%m-%Y"), axis=1)
+target_df['datetime'] = target_df.apply(lambda x: pd.to_datetime(f"{x['dateofmonth_sa']}-{x['monthofyr_sa']}-{x['year_sa']}", format="%d-%m-%Y"), axis=1).dt.date
 
 # Print the updated dataframe
 display(target_df)
@@ -47,6 +47,11 @@ display(df_grouped)
 
 # COMMAND ----------
 
+test = target_df.groupby("netchange").agg({"dateofmonth_sa": "mean"}).reset_index()
+display(test)
+
+# COMMAND ----------
+
 # Read in the silver table data
 #bike_df = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/bike_trip_data")
 
@@ -62,15 +67,186 @@ display(spark.sql('select * from silver_weather_info_dynamic'))
 
 # COMMAND ----------
 
+import pandas as pd
+
+# Execute SQL query in Spark and store result in a dataframe
+df_spark = spark.sql('select * from silver_weather_info_dynamic')
+
+# Convert Spark dataframe to Pandas dataframe
+weather_df = df_spark.toPandas()
+
+# COMMAND ----------
+
+display(weather_df)
+
+# COMMAND ----------
+
+weather_df['datetime'] = pd.to_datetime(weather_df['dt'], unit='s')
+display(weather_df)
+
+# COMMAND ----------
+
+weather_df = weather_df[['datetime', 'temp', 'clouds', 'visibility', 'feels_like', 'humidity']]
+weather_df = weather_df.rename(columns={'datetime': 'weather_datetime',
+                                        'temp': 'weather_temp',
+                                        'clouds': 'weather_clouds',
+                                        'visibility': 'weather_visibility',
+                                        'feels_like': 'weather_feels_like',
+                                        'humidity': 'weather_humidity'})
+
+# COMMAND ----------
+
+display(weather_df)
+
+# COMMAND ----------
+
+import pandas as pd
+df_spark = spark.sql('select * from silver_weather_historic')
+historic_weather = df_spark.toPandas()
+display(historic_weather)
+
+# COMMAND ----------
+
+historic_weather['datetime'] = pd.to_datetime(historic_weather['dt'],unit='s').dt.date
+display(historic_weather)
+
+# COMMAND ----------
+
+weather_df_historic = historic_weather[['datetime', 'temp', 'clouds', 'visibility', 'feels_like', 'humidity']]
+weather_df_historic = weather_df_historic.rename(columns={'datetime': 'ds',
+                                        'temp': 'weather_temp',
+                                        'clouds': 'weather_clouds',
+                                        'visibility': 'weather_visibility',
+                                        'feels_like': 'weather_feels_like',
+                                        'humidity': 'weather_humidity'})
+
+# COMMAND ----------
+
+display(weather_df_historic)
+
+# COMMAND ----------
+
+weather_df_historic['weather_temp'] = pd.to_numeric(weather_df_historic['weather_temp'], errors='coerce')
+weather_df_historic['weather_clouds'] = pd.to_numeric(weather_df_historic['weather_clouds'], errors='coerce')
+weather_df_historic['weather_visibility'] = pd.to_numeric(weather_df_historic['weather_visibility'], errors='coerce')
+weather_df_historic['weather_feels_like'] = pd.to_numeric(weather_df_historic['weather_feels_like'], errors='coerce')
+weather_df_historic['weather_humidity'] = pd.to_numeric(weather_df_historic['weather_humidity'], errors='coerce')
+
+df_grouped_hist = weather_df_historic.groupby("ds").agg({"weather_temp": "mean", 
+                                                         "weather_clouds": "mean", 
+                                                         "weather_visibility": "mean",
+                                                         "weather_feels_like": "mean",
+                                                         "weather_humidity": "mean"}).reset_index()
+
+
+# COMMAND ----------
+
+display(df_grouped_hist)
+
+# COMMAND ----------
+
+merged_df = df_grouped.join(df_grouped_hist.set_index('ds'), on='ds', how='left')
+
+
+# COMMAND ----------
+
+merged_df.dropna(inplace=True)
+
+# COMMAND ----------
+
+display(merged_df)
+
+# COMMAND ----------
+
+test = target_df.groupby("netchange").agg({"dateofmonth_sa": "mean"}).reset_index()
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+display(spark.sql('show tables'))
+
+# COMMAND ----------
+
 display(spark.sql('select * from silver_station_status_dynamic'))
 
 # COMMAND ----------
 
+import pandas as pd
+
+# Execute SQL query in Spark and store result in a dataframe
+df_spark = spark.sql('select * from silver_weather_info_dynamic')
+
+# Convert Spark dataframe to Pandas dataframe
+weather_df = df_spark.toPandas()
+
+# COMMAND ----------
+
+import pandas as pd
+import datetime as dt
+
+# Convert datetime column to Unix timestamp
+weather_df['datetime'] = pd.to_datetime(weather_df['dt'],unit='s').dt.date
+
+# View updated dataframe
+display(weather_df.head())
+
+# COMMAND ----------
+
+weather_df = weather_df[['datetime', 'temp', 'clouds', 'visibility', 'feels_like', 'humidity']]
+weather_df = weather_df.rename(columns={'datetime': 'weather_datetime',
+                                        'temp': 'weather_temp',
+                                        'clouds': 'weather_clouds',
+                                        'visibility': 'weather_visibility',
+                                        'feels_like': 'weather_feels_like',
+                                        'humidity': 'weather_humidity'})
+
+# COMMAND ----------
+
+weather_df = weather_df.rename(columns={"datetime": "ds", "netchange": "y"})
+
+# COMMAND ----------
+
+display(weather_df)
+
+
+# COMMAND ----------
+
+weather_df['weather_temp'] = pd.to_numeric(weather_df['weather_temp'], errors='coerce')
+weather_df['weather_clouds'] = pd.to_numeric(weather_df['weather_clouds'], errors='coerce')
+weather_df['weather_visibility'] = pd.to_numeric(weather_df['weather_visibility'], errors='coerce')
+weather_df['weather_feels_like'] = pd.to_numeric(weather_df['weather_feels_like'], errors='coerce')
+weather_df['weather_humidity'] = pd.to_numeric(weather_df['weather_humidity'], errors='coerce')
+
+df_grouped_pred = weather_df.groupby("weather_datetime").agg({"weather_temp": "mean", 
+                                                         "weather_clouds": "mean", 
+                                                         "weather_visibility": "mean",
+                                                         "weather_feels_like": "mean",
+                                                         "weather_humidity": "mean"}).reset_index()
+
+
+
+#weather_pred = weather_df.groupby("weather_datetime").agg({"weather_temp": "mean"}).reset_index()
+
+
+
+# COMMAND ----------
+
+display(df_grouped_pred)
+
+# COMMAND ----------
+
+#display(spark.sql('select * from silver_station_status_dynamic'))
+
+# COMMAND ----------
+
 # Aggregate net bike change by hour
-agg_df = bike_df.groupBy("date", hour("starttime")).agg({"net_bike_change": "sum"})
+#agg_df = bike_df.groupBy("date", hour("starttime")).agg({"net_bike_change": "sum"})
 
 # Rename columns for Prophet compatibility
-agg_df = agg_df.withColumnRenamed("date", "ds").withColumnRenamed("sum(net_bike_change)", "y")
+#agg_df = agg_df.withColumnRenamed("date", "ds").withColumnRenamed("sum(net_bike_change)", "y")
 
 
 # COMMAND ----------
@@ -81,7 +257,19 @@ model = Prophet()
 # COMMAND ----------
 
 # Fit the model to the data
-model.fit(df_grouped)
+model.fit(merged_df)
+
+# COMMAND ----------
+
+model.add_regressor('weather_temp')
+model.add_regressor('weather_clouds')
+model.add_regressor('weather_visibility')
+model.add_regressor('weather_feels_like')
+model.add_regressor('weather_humidity')
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
