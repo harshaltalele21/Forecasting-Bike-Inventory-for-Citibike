@@ -194,7 +194,37 @@ display(spark.sql('create table if not exists target_variable as select a.year_s
 
 # COMMAND ----------
 
-display(spark.sql('select * from target_variable limit 5 '))  
+display(spark.sql('drop table if exists target_variable_v1'))
+
+spark.sql('create table if not exists target_variable_v1 as select a.year_sa,a.monthofyr_sa,a.dateofmonth_sa,a.hourofday_sa,b.year_ea,b.monthofyr_ea,b.dateofmonth_ea,b.hourofday_ea,coalesce(a.rides_started,0) as rides_started,coalesce(b.rides_ended,0) as rides_ended,(coalesce(b.rides_ended,0)-coalesce(a.rides_started,0)) as netchange from (select year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa,count(distinct ride_id) as rides_started from silver_bike_trip_historic where start_station_name="6 Ave & W 33 St"  and started_at<="2023-03-31 23:59:57" group by year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa) as a FULL OUTER join (select year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea,count(distinct ride_id) as rides_ended from silver_bike_trip_historic where end_station_name="6 Ave & W 33 St" and ended_at<="2023-03-31 23:59:57" group by year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea) as b on a.year_sa=b.year_ea and a.monthofyr_sa=b.monthofyr_ea and a.dateofmonth_sa=b.dateofmonth_ea and a.hourofday_sa=b.hourofday_ea')
+
+# COMMAND ----------
+
+netchange = spark.sql('select * from target_variable_v1')
+netchange = netchange.toPandas()
+
+netchange['year_sa'].fillna(netchange['year_ea'], inplace=True)
+netchange['monthofyr_sa'].fillna(netchange['monthofyr_ea'], inplace=True)
+netchange['dateofmonth_sa'].fillna(netchange['dateofmonth_ea'], inplace=True)
+netchange['hourofday_sa'].fillna(netchange['hourofday_ea'], inplace=True)
+
+display(netchange.isna().any())
+
+# COMMAND ----------
+
+netchange.drop('year_ea', inplace=True, axis = 1)
+netchange.drop('monthofyr_ea', inplace=True, axis = 1)
+netchange.drop('dateofmonth_ea', inplace=True, axis = 1)
+netchange.drop('hourofday_ea', inplace=True, axis = 1)
+
+
+# COMMAND ----------
+
+display(spark.sql('drop table if exists target_variable'))
+netchange_spark = spark.createDataFrame(netchange)
+netchange_spark.write.saveAsTable("G04_db.target_variable", format='delta', mode='overwrite')
+
+display(spark.sql("SELECT * FROM target_variable LIMIT 20"))
 
 # COMMAND ----------
 
