@@ -16,12 +16,14 @@ print("YOUR CODE HERE...")
 from pyspark.sql.functions import expr,col,month,year,dayofmonth,dayofweek,hour
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import concat_ws
-
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+import plotly.express as px
+import pandas as pd
+from pyspark.sql.functions import collect_list
 
 # COMMAND ----------
 
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
 
 bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
 weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
@@ -50,15 +52,7 @@ weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
 
 # COMMAND ----------
 
-df = spark.read.csv("dbfs:/FileStore/tables/raw/weather/", header=True, inferSchema=True)
-
-# COMMAND ----------
-
-df.count()
-
-# COMMAND ----------
-
-display(bike_trip_data)
+#df = spark.read.csv("dbfs:/FileStore/tables/raw/weather/", header=True, inferSchema=True)
 
 # COMMAND ----------
 
@@ -70,19 +64,11 @@ merge_df = bike_trip_data.withColumnRenamed("started_at", "datetime")
 
 # COMMAND ----------
 
-display(merge_df)
+#df = spark.read.csv("dbfs:/FileStore/tables/raw/bike_trips/", header=True, inferSchema=True)
 
 # COMMAND ----------
 
-from pyspark.sql import SparkSession
-
-# COMMAND ----------
-
-df = spark.read.csv("dbfs:/FileStore/tables/raw/bike_trips/", header=True, inferSchema=True)
-
-# COMMAND ----------
-
-col = df.select("start_station_name")
+#col = df.select("start_station_name")
 
 # COMMAND ----------
 
@@ -91,11 +77,7 @@ raw_df = raw_df.filter((raw_df.start_station_name == GROUP_STATION_ASSIGNMENT)|(
 
 # COMMAND ----------
 
-display(raw_df)
-
-# COMMAND ----------
-
-df = raw_df.select("ride_id", "rideable_type", "started_at", "ended_at", "start_station_name", "start_station_id", "end_station_name", "end_station_id" ,"member_casual") \
+df = raw_df.select("ride_id", "rideable_type", "started_at", "ended_at", "start_station_name", "start_station_id", "end_station_name", "end_station_id", "member_casual") \
                 .withColumn("year", year(col("started_at"))) \
                 .withColumn("month", month(col("started_at"))) \
                 .withColumn("day", dayofmonth(col("started_at"))) \
@@ -133,41 +115,22 @@ display(agg_df_day.head(2))
 
 # COMMAND ----------
 
-import matplotlib.pyplot as plt
-import plotly.express as px
-from pyspark.sql.functions import collect_list
-import plotly.express as px
+# DBTITLE 1,Line Graph for Monthly Bike Rides
+pandas_agg_df = agg_df_month.toPandas()
+year_month=pandas_agg_df["year_month"]
+num_rides=pandas_agg_df["num_rides"]
 
 
-# COMMAND ----------
+df_monthly_rides = pd.DataFrame({'year_month': year_month, 'num_rides': num_rides})
 
-import matplotlib.pyplot as plt
-import plotly.express as px
+fig = px.line(df_monthly_rides, x='year_month', y='num_rides', title='Monthly Bike Rides')
 
 
-pandas_df = agg_df_month.toPandas()
-
-# # plot the data using matplotlib
-# plt.plot(pandas_df["year_month"], pandas_df["num_rides"])
-# plt.xlabel("month")
-# plt.xticks(rotation = 90)
-
-# plt.ylabel("Number of Rides")
-# plt.title("Monthly Bike Rides")
-# plt.show()
-
-fig = px.line(pandas_df, x="year_month", y="num_rides", title='Monthly Bike Rides',
-                labels = {
-                    "num_rides" : "Number of Rides",
-                    "year_month" : "Year & Month"
-                })
 fig.show()
 
 # COMMAND ----------
 
-
-# import matplotlib.pyplot as plt
-from pyspark.sql.functions import collect_list
+# DBTITLE 1,Number of Rides by Member Type
 
 # create a DataFrame with aggregated data
 agg_data = agg_df.groupBy("year", "month", "year_month", "member_casual").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
@@ -181,33 +144,22 @@ casual_data = agg_data.filter(agg_df.member_casual == "casual").orderBy("year_mo
 year_month = [str(row.year_month) for row in member_data.select("year_month").collect()]
 member_num_rides = [int(row.num_rides) for row in member_data.select("num_rides").collect()]
 casual_num_rides = [int(row.num_rides) for row in casual_data.select("num_rides").collect()]
+# Convert the lists to a Pandas dataframe
+df_member_type = pd.DataFrame({'year_month': year_month, 'member_num_rides': member_num_rides, 'casual_num_rides': casual_num_rides})
 
-plt.plot(year_month, member_num_rides, label="member")
-plt.plot(year_month, casual_num_rides, label="casual")
-
-# add labels and legend
-plt.xlabel("Month")
-plt.ylabel("Count")
-plt.xticks(rotation = 90)
-plt.title("Member vs. Casual Ridership")
-plt.legend()
-
-# show the plot
-plt.show()
-
-
-# COMMAND ----------
-
-fig = px.line(agg_data.toPandas(), x="year_month", y="num_rides", title='Monthly Bike Rides', color="member_casual",
-                labels = {
-                    "num_rides" : "Number of Rides",
-                    "year_month" : "Year & Month"
-                })
-
+# Use Plotly Express to plot the data as line graphs
+fig = px.line(df_member_type, x='year_month', y=['member_num_rides', 'casual_num_rides'], title='Number of Rides by Member Type')
+fig.update_layout(
+    yaxis_title="Count",
+    xaxis_title="Year_month"
+)
+# Show the plot
 fig.show()
 
+
 # COMMAND ----------
 
+# DBTITLE 1,Classic vs. Electric vs. Dock Bike
 # create a DataFrame with aggregated data
 agg_data = agg_df.groupBy("year", "month", "year_month", "rideable_type").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
 
@@ -223,126 +175,46 @@ electric_num_rides = [int(row.num_rides) for row in electric_data.select("num_ri
 docked_num_rides = [int(row.num_rides) for row in docked_data.select("num_rides").collect()]
 
 
-plt.plot(year_month, classic_num_rides, label="classic")
-plt.plot(year_month, electric_num_rides, label="electric")
-plt.plot(year_month, docked_num_rides, label="dock")
+# Convert the lists to a Pandas dataframe
+df_ride_type = pd.DataFrame({'year_month': year_month, 'classic_num_rides': classic_num_rides, 'electric_num_rides': electric_num_rides,'docked_num_rides':docked_num_rides})
 
+# Use Plotly Express to plot the data as line graphs
+fig = px.line(df_ride_type, x='year_month', y=['classic_num_rides', 'electric_num_rides','docked_num_rides'], title='Classic vs. Electric vs. Dock Bike')
 
-# add labels and legend
-plt.xlabel("Month")
-plt.ylabel("Count")
-plt.xticks(rotation = 90)
-plt.title("Classic vs. Electric vs. Dock Bike")
-plt.legend()
+# Show the plot
+fig.show()
 
-# show the plot
-plt.show()
 
 # COMMAND ----------
 
-import matplotlib.pyplot as plt
-
+# DBTITLE 1,Total Bike Rides - By Day of Week
 agg_df_dayofweek = df.groupBy("day_of_week")\
                           .agg({"ride_id":"count"})\
                           .withColumnRenamed("count(ride_id)","num_rides")\
                           .orderBy("day_of_week")
 
-pandas_df = agg_df_dayofweek.toPandas()
+pandas_df_dayofweek = agg_df_dayofweek.toPandas()
+day_of_week=pandas_df_dayofweek["day_of_week"]
+num_rides=pandas_df_dayofweek["num_rides"]
+# Convert the lists to a Pandas dataframe
+df_day_of_week = pd.DataFrame({'num_rides': num_rides, 'day_of_week': day_of_week})
 
-# plot the data using matplotlib
-plt.plot(pandas_df["day_of_week"], pandas_df["num_rides"])
-plt.xlabel("Day Of Week")
-plt.xticks(rotation = 90)
-plt.ylabel("Number of Rides")
-plt.title("Total Bike Rides - By Day of Week")
-plt.show()
+# Use Plotly Express to plot the data as line graphs
+fig = px.line(df_day_of_week, x=day_of_week, y=num_rides, title='Total Bike Rides - By Day of Week')
 
-print("1 -> Sunday & 7 -> Saturday")
+# Show the plot
+fig.show()
+
+
 
 # COMMAND ----------
 
 pandas_df_day = agg_df_day.toPandas()
-
-# plot the data using matplotlib
-# plt.plot(pandas_df_day["year_month_day"], pandas_df_day["num_rides"])
-# plt.xlabel("day")
-# plt.xticks(rotation = 90)
-# plt.ylabel("Number of Rides")
-# plt.title("Daily Bike Rides")
-# plt.show()
-
 fig = px.line(pandas_df_day, x="year_month_day", y="num_rides", title='Daily Bike Rides',
                 labels = {
                     "num_rides" : "Number of Rides",
-                    "year_month" : "Year-Month-Date"
-                })
-
+                    "year_month" : "Year-Month-Date"})
 fig.show()
-
-# COMMAND ----------
-
-# create a DataFrame with aggregated data
-agg_data = agg_df.groupBy("year", "month", "day", "year_month_day", "member_casual").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
-
-# filter for member_casual data
-member_data = agg_data.filter(agg_df.member_casual == "member").orderBy("year_month_day")
-
-# filter for casual data
-casual_data = agg_data.filter(agg_df.member_casual == "casual").orderBy("year_month_day")
-
-year_month_day = [str(row.year_month_day) for row in member_data.select("year_month_day").collect()]
-member_num_rides = [int(row.num_rides) for row in member_data.select("num_rides").collect()]
-casual_num_rides = [int(row.num_rides) for row in casual_data.select("num_rides").collect()]
-
-plt.plot(year_month_day, member_num_rides, label="member")
-plt.plot(year_month_day, casual_num_rides, label="casual")
-
-# add labels and legend
-plt.xlabel("Month")
-plt.ylabel("Count")
-plt.xticks(rotation = 90)
-plt.title("Member vs. Casual Ridership")
-plt.legend()
-
-# show the plot
-plt.show()
-
-# COMMAND ----------
-
-import matplotlib.pyplot as plt
-from pyspark.sql.functions import collect_list
-
-# create a DataFrame with aggregated data
-agg_data = agg_df.groupBy("year", "month", "day", "year_month_day", "rideable_type").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
-
-# filter for member_casual data
-classic_data = agg_data.filter(agg_df.rideable_type == "classic_bike").orderBy("year_month_day")
-electric_data = agg_data.filter(agg_df.rideable_type == "electric_bike").orderBy("year_month_day")
-docked_data = agg_data.filter(agg_df.rideable_type == "docked_bike").orderBy("year_month_day")
-
-
-year_month = [str(row.year_month_day) for row in classic_data.select("year_month_day").collect()]
-classic_num_rides = [int(row.num_rides) for row in classic_data.select("num_rides").collect()]
-electric_num_rides = [int(row.num_rides) for row in electric_data.select("num_rides").collect()]
-docked_num_rides = [int(row.num_rides) for row in docked_data.select("num_rides").collect()]
-
-
-
-plt.plot(year_month_day, classic_num_rides, label="classic")
-plt.plot(year_month_day, electric_num_rides, label="electric")
-plt.plot(year_month_day, docked_num_rides, label="dock")
-
-
-# add labels and legend
-plt.xlabel("Day")
-plt.ylabel("Count")
-plt.xticks(rotation = 90)
-plt.title("Classic vs. Electric vs. Dock Bike")
-plt.legend()
-
-
-# show the plot
-plt.show()
 
 # COMMAND ----------
 
