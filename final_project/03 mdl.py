@@ -86,7 +86,7 @@ display(weather_df)
 
 # COMMAND ----------
 
-weather_df = weather_df[['datetime', 'temp', 'clouds', 'visibility', 'feels_like', 'humidity']]
+weather_df = weather_df[['datetime', 'temp', 'clouds', 'visibility', 'feels_like','humidity']]
 weather_df = weather_df.rename(columns={'datetime': 'weather_datetime',
                                         'temp': 'weather_temp',
                                         'clouds': 'weather_clouds',
@@ -97,6 +97,10 @@ weather_df = weather_df.rename(columns={'datetime': 'weather_datetime',
 # COMMAND ----------
 
 display(weather_df)
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
@@ -112,7 +116,7 @@ display(historic_weather)
 
 # COMMAND ----------
 
-weather_df_historic = historic_weather[['datetime', 'temp', 'clouds', 'visibility', 'feels_like', 'humidity']]
+weather_df_historic = historic_weather[['datetime', 'temp', 'clouds', 'visibility', 'feels_like','main' ,'humidity']]
 weather_df_historic = weather_df_historic.rename(columns={'datetime': 'ds',
                                         'temp': 'weather_temp',
                                         'clouds': 'weather_clouds',
@@ -220,7 +224,7 @@ weather_df['weather_visibility'] = pd.to_numeric(weather_df['weather_visibility'
 weather_df['weather_feels_like'] = pd.to_numeric(weather_df['weather_feels_like'], errors='coerce')
 weather_df['weather_humidity'] = pd.to_numeric(weather_df['weather_humidity'], errors='coerce')
 
-df_grouped_pred = weather_df.groupby("weather_datetime").agg({"weather_temp": "mean", 
+widisplay() = weather_df.groupby("weather_datetime").agg({"weather_temp": "mean", 
                                                          "weather_clouds": "mean", 
                                                          "weather_visibility": "mean",
                                                          "weather_feels_like": "mean",
@@ -238,6 +242,14 @@ display(df_grouped_pred)
 
 # COMMAND ----------
 
+min(df_grouped_pred['weather_datetime'])
+
+# COMMAND ----------
+
+display(merged_df)
+
+# COMMAND ----------
+
 #display(spark.sql('select * from silver_station_status_dynamic'))
 
 # COMMAND ----------
@@ -251,13 +263,54 @@ display(df_grouped_pred)
 
 # COMMAND ----------
 
-# Initialize Prophet model
-model = Prophet()
+## FB PROPHET
 
 # COMMAND ----------
 
-# Fit the model to the data
+merged_df = merged_df.rename(columns={'datetime': 'ds', 'y': 'y', 'weather_temp': 'temp', 'weather_clouds': 'clouds', 'weather_visibility': 'visibility', 'weather_feels_like': 'feels_like', 'weather_humidity': 'humidity'})
+
+
+# COMMAND ----------
+
+model = Prophet()
+model.add_regressor('temp')
+model.add_regressor('clouds')
+model.add_regressor('visibility')
+model.add_regressor('feels_like')
+model.add_regressor('humidity')
 model.fit(merged_df)
+
+
+# COMMAND ----------
+
+future_df = pd.DataFrame({'ds': df_grouped_pred['weather_datetime']})
+
+# COMMAND ----------
+
+future_df['temp'] = df_grouped_pred['weather_temp']
+future_df['clouds'] = df_grouped_pred['weather_clouds']
+future_df['visibility'] = df_grouped_pred['weather_visibility']
+future_df['feels_like'] = df_grouped_pred['weather_feels_like']
+future_df['humidity'] = df_grouped_pred['weather_humidity']
+forecast = model.predict(future_df)
+
+
+# COMMAND ----------
+
+display(forecast)
+
+# COMMAND ----------
+
+fig1 = model.plot(forecast)
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# Initialize Prophet model
+model = Prophet()
 
 # COMMAND ----------
 
@@ -266,6 +319,15 @@ model.add_regressor('weather_clouds')
 model.add_regressor('weather_visibility')
 model.add_regressor('weather_feels_like')
 model.add_regressor('weather_humidity')
+
+# COMMAND ----------
+
+# Fit the model to the data
+model.fit(merged_df)
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
