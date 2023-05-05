@@ -58,32 +58,8 @@ weather_dynamic_all.write.partitionBy("time").option("overwriteSchema", "true").
 
 # COMMAND ----------
 
-# Show files under group file path for respective historic data sets
-display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data"))
-
-# COMMAND ----------
-
-# Show files under group file path for respective historic data sets
-display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/bike_trip_data"))
-
-# COMMAND ----------
-
 # to remove files from directory
 dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_data/',True)
-
-# COMMAND ----------
-
-spark.sql('use database g04_db')
-
-# COMMAND ----------
-
-# Get tables
-display(spark.sql('show tables'))
-
-# COMMAND ----------
-
-# Validation
-display(spark.sql('select min(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
 
 # COMMAND ----------
 
@@ -103,6 +79,21 @@ bike_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_b
 
 # COMMAND ----------
 
+# Show files under group file path for respective historic data sets
+display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/bike_trip_data"))
+
+# COMMAND ----------
+
+# Validation
+display(spark.sql('select max(started_at) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
+
+# COMMAND ----------
+
+# Validation
+display(spark.sql('select count(*) from g04_db.bronze_bike_trip_historic where started_at!="started_at"'))
+
+# COMMAND ----------
+
 # Write Strean to append weather data
 
 weather_data.writeStream.format("delta")\
@@ -116,6 +107,21 @@ weather_data.writeStream.format("delta")\
 # Creating weather historic table
 weather_stream = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/weather_data/")
 weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_weather_historic")
+
+# COMMAND ----------
+
+# Show files under group file path for respective historic data sets
+display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data"))
+
+# COMMAND ----------
+
+# Validation
+display(spark.sql('select count(*) from g04_db.bronze_weather_historic'))
+
+# COMMAND ----------
+
+# Get tables
+display(spark.sql('show tables'))
 
 # COMMAND ----------
 
