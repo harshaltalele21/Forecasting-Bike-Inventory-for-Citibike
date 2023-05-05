@@ -13,7 +13,7 @@ print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
-from pyspark.sql.functions import expr,col,month,year,dayofmonth,dayofweek
+from pyspark.sql.functions import expr,col,month,year,dayofmonth,dayofweek,hour
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import concat_ws
 
@@ -128,27 +128,45 @@ agg_df_day = agg_df.groupBy("year","month","day","year_month_day")\
                           .agg({"num_rides":"sum"})\
                           .withColumnRenamed("sum(num_rides)","num_rides")\
                           .orderBy("year","month","day","year_month_day")
+                          
 display(agg_df_day.head(2))
 
 # COMMAND ----------
 
 import matplotlib.pyplot as plt
+import plotly.express as px
+from pyspark.sql.functions import collect_list
+import plotly.express as px
+
+
+# COMMAND ----------
+
+import matplotlib.pyplot as plt
+import plotly.express as px
+
 
 pandas_df = agg_df_month.toPandas()
 
-# plot the data using matplotlib
-plt.plot(pandas_df["year_month"], pandas_df["num_rides"])
-plt.xlabel("month")
-plt.xticks(rotation = 90)
-6
-plt.ylabel("Number of Rides")
-plt.title("Monthly Bike Rides")
-plt.show()
+# # plot the data using matplotlib
+# plt.plot(pandas_df["year_month"], pandas_df["num_rides"])
+# plt.xlabel("month")
+# plt.xticks(rotation = 90)
+
+# plt.ylabel("Number of Rides")
+# plt.title("Monthly Bike Rides")
+# plt.show()
+
+fig = px.line(pandas_df, x="year_month", y="num_rides", title='Monthly Bike Rides',
+                labels = {
+                    "num_rides" : "Number of Rides",
+                    "year_month" : "Year & Month"
+                })
+fig.show()
 
 # COMMAND ----------
 
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from pyspark.sql.functions import collect_list
 
 # create a DataFrame with aggregated data
@@ -177,10 +195,16 @@ plt.legend()
 # show the plot
 plt.show()
 
+
 # COMMAND ----------
 
-import matplotlib.pyplot as plt
-from pyspark.sql.functions import collect_list
+fig = px.line(agg_data.toPandas(), x="year_month", y="num_rides", title='Monthly Bike Rides', color="member_casual",
+                labels = {
+                    "num_rides" : "Number of Rides",
+                    "year_month" : "Year & Month"
+                })
+
+fig.show()
 
 # COMMAND ----------
 
@@ -240,12 +264,20 @@ print("1 -> Sunday & 7 -> Saturday")
 pandas_df_day = agg_df_day.toPandas()
 
 # plot the data using matplotlib
-plt.plot(pandas_df_day["year_month_day"], pandas_df_day["num_rides"])
-plt.xlabel("day")
-plt.xticks(rotation = 90)
-plt.ylabel("Number of Rides")
-plt.title("Daily Bike Rides")
-plt.show()
+# plt.plot(pandas_df_day["year_month_day"], pandas_df_day["num_rides"])
+# plt.xlabel("day")
+# plt.xticks(rotation = 90)
+# plt.ylabel("Number of Rides")
+# plt.title("Daily Bike Rides")
+# plt.show()
+
+fig = px.line(pandas_df_day, x="year_month_day", y="num_rides", title='Daily Bike Rides',
+                labels = {
+                    "num_rides" : "Number of Rides",
+                    "year_month" : "Year-Month-Date"
+                })
+
+fig.show()
 
 # COMMAND ----------
 
@@ -321,7 +353,7 @@ from pyspark.sql.functions import *
 from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
 
 
-dates = pd.DataFrame({'datetime':pd.date_range('2021-11-01', '2023-02-28')})
+dates = pd.DataFrame({'datetime':pd.date_range('2021-11-01', '2024-03-27')})
 #dates['date']=dates['date']
 #df = pd.DataFrame()
 #df['Date'] = dr
@@ -337,7 +369,7 @@ display(dates)
 
 # COMMAND ----------
 
-from pyspark.sql import SparkSession
+# from pyspark.sql import SparkSession
 #Create PySpark SparkSession
 spark = SparkSession.builder \
     .master("local[1]") \
@@ -353,15 +385,120 @@ dates.show()
 df_hol=df[["rideable_type","member_casual","ride_id","started_at"]]
 df_hol=df_hol.withColumn("date",to_date("started_at"))
 
-df_hol_v1=df_hol.join(dates,df_hol.date == dates.Date,"inner").select("rideable_type","member_casual","Hol_Non_Hol","started_at","ride_id",df_hol.date)
-df_hol_v1
+df_hol_v1 = df_hol.join(dates,df_hol.date == dates.Date,"inner").select("rideable_type","member_casual","Hol_Non_Hol","started_at","ride_id",df_hol.date)
+
 agg_hol = df_hol_v1.groupBy("rideable_type", "member_casual", "Hol_Non_Hol","date").agg({"ride_id":"count"}).withColumnRenamed("count(ride_id)","num_rides")
 display(agg_hol)
 
 # COMMAND ----------
 
-agg_hol_v1=agg_hol.groupBy("rideable_type", "member_casual", "Hol_Non_Hol").agg({"num_rides":"mean"}).withColumnRenamed("average(num_rides)","avg_rides").orderBy("rideable_type","member_casual","Hol_Non_Hol")
-display(agg_hol_v1)
+agg_hol_summary = agg_hol.groupBy("rideable_type", "member_casual", "Hol_Non_Hol").agg({"num_rides":"mean"}).withColumnRenamed("average(num_rides)","avg_rides").orderBy("rideable_type","member_casual","Hol_Non_Hol")
+display(agg_hol_summary)
+
+# COMMAND ----------
+
+hol_vs_nonhol = agg_hol.groupBy("date", "Hol_Non_Hol").agg({"num_rides":"sum"}).withColumnRenamed("sum(num_rides)","num_rides")
+
+fig = px.box(hol_vs_nonhol.toPandas(), x="num_rides", y="Hol_Non_Hol", title='Holiday vs Non-Holiday Ride Distribution',
+                labels = {
+                    "num_rides" : "Number of Rides"
+                }
+            )
+
+fig.show()
+
+# COMMAND ----------
+
+# weather_df = weather_data.toPandas()
+# weather_df.drop(index=0)
+# display(weather_df.head(2))
+display(weather_data)
+
+# COMMAND ----------
+
+display(spark.sql("select * from silver_weather_historic"))
+
+# COMMAND ----------
+
+display(agg_df_day)
+
+# COMMAND ----------
+
+agg_df_hourly_raw = raw_df.select("ride_id", "rideable_type", "started_at", "ended_at", "start_station_name", "start_station_id", "end_station_name", "end_station_id" ,"member_casual") \
+                .withColumn("year", year(col("started_at"))) \
+                .withColumn("month", month(col("started_at"))) \
+                .withColumn("day", dayofmonth(col("started_at"))) \
+                .withColumn("day_of_week", dayofweek(col("started_at"))) \
+                .withColumn("hour_of_day", hour(col("started_at")))
+agg_df_hourly_raw.show(10)
+
+
+# COMMAND ----------
+
+agg_df_hourly = agg_df_hourly_raw.groupBy("year","month","day","hour_of_day")\
+                          .agg({"ride_id":"count"})\
+                          .withColumnRenamed("count(ride_id)","num_rides")\
+                          .orderBy("year","month","day","hour_of_day")
+agg_df_hourly = agg_df_hourly.withColumn("year_month", concat_ws("_","year","month"))
+agg_df_hourly = agg_df_hourly.withColumn("year_month_day", concat_ws("_","year_month","day"))
+agg_df_hourly = agg_df_hourly.withColumn("hourly_date", concat_ws("_","year_month_day","hour_of_day"))
+display(agg_df_hourly.head(2))
+
+# COMMAND ----------
+
+agg_df_hourly.createOrReplaceTempView("hourly_rides")
+display(spark.sql("select * from hourly_rides limit 10"))
+
+# COMMAND ----------
+
+weather_agg = spark.sql(" \
+                select a.hourly_date, a.num_rides, \
+                b.temp, b.humidity, b.wind_speed, b.main, b.description \
+                from hourly_rides as a \
+                inner join silver_weather_historic as b \
+                on a.year = b.year and a.month = b.monthofyr and a.day = b.dateofmonth and a.hour_of_day = b.hourofday")
+display(weather_agg.head(10))
+
+# COMMAND ----------
+
+fig = px.bar(weather_agg.toPandas(), x="main", color_discrete_map={
+        'main': 'blue'
+        # 'some_other_group': 'green'
+    })
+fig.update_traces(marker_color='green')
+fig.show()
+
+# COMMAND ----------
+
+weather_agg = weather_agg.withColumn("temp", weather_agg["temp"].cast('float'))
+weather_agg = weather_agg.withColumn("humidity", weather_agg["humidity"].cast('float'))
+weather_agg = weather_agg.withColumn("wind_speed", weather_agg["wind_speed"].cast('float'))
+
+
+# COMMAND ----------
+
+# weather_agg_filtered = weather_agg[weather_agg['main'] in ['Clouds', 'Rain', 'Clear']]
+weather_agg_filtered = weather_agg[weather_agg['main'].isin(['Clouds', 'Rain', 'Clear'])]
+
+fig = px.box(weather_agg_filtered.toPandas(), x="num_rides", y="main", title='Hourly ride count by Weather ',
+                labels = {
+                    "num_rides" : "Number of Rides", 
+                    "main" : "Weather"
+                }
+            )
+
+fig.show()
+
+# COMMAND ----------
+
+fig = px.scatter(weather_agg.toPandas(), x="temp", y="num_rides", title='Hourly ride count by Weather')
+
+fig.show()
+
+# COMMAND ----------
+
+fig = px.scatter(weather_agg_filtered.toPandas(), x="temp", y="humidity", title='Hourly ride count by Weather', size="num_rides", color="main")
+fig.show()
 
 # COMMAND ----------
 
