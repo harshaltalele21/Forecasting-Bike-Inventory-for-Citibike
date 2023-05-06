@@ -3,6 +3,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Read stream for bike and weather historic csv data
 
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -28,26 +29,27 @@ weather_data = spark \
 
 # COMMAND ----------
 
+# DBTITLE 1,Read bronze data files and create dynamic data frames
 station_info_all = spark.read.format("delta").load(BRONZE_STATION_INFO_PATH)
 station_status_all = spark.read.format("delta").load(BRONZE_STATION_STATUS_PATH)
 weather_dynamic_all = spark.read.format("delta").load(BRONZE_NYC_WEATHER_PATH)
 
 # COMMAND ----------
 
-# Creating station info table for our station name
+# DBTITLE 1,Creating station info table for our station name
 station_info=station_info_all.filter(station_info_all["name"]==GROUP_STATION_ASSIGNMENT)
 display(station_info)
 
 # COMMAND ----------
 
-# Creating station status table for our station name
+# DBTITLE 1,Creating station status table for our station name
 group_id=station_info.select("station_id").collect()[0][0]
 station_status=station_status_all.filter(station_status_all["station_id"]==group_id)
 display(station_status)
 
 # COMMAND ----------
 
-# Creating dynamic tables
+# DBTITLE 1,Creating dynamic tables
 station_status.write.saveAsTable("G04_db.bronze_station_status_dynamic", format='delta', mode='overwrite')
 station_info.write.saveAsTable("G04_db.bronze_station_info_dynamic", format='delta', mode='overwrite')
 weather_dynamic_all.write.partitionBy("time").option("overwriteSchema", "true").saveAsTable("G04_db.bronze_weather_info_dynamic", format='delta', mode='overwrite')
@@ -60,8 +62,7 @@ dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_data/',True)
 
 # COMMAND ----------
 
-# Write Strean to append bike trips data
-
+# DBTITLE 1,Write Stream to append bike trips data
 bike_trip_data.writeStream.format("delta")\
   .outputMode("append")\
   .option("checkpointLocation","dbfs:/FileStore/tables/G04/bike_trip_data/checkpoint")\
@@ -91,8 +92,7 @@ display(spark.sql('select count(*) from g04_db.bronze_bike_trip_historic where s
 
 # COMMAND ----------
 
-# Write Strean to append weather data
-
+# DBTITLE 1,Write Stream to append weather data
 weather_data.writeStream.format("delta")\
   .outputMode("append")\
   .option("checkpointLocation","dbfs:/FileStore/tables/G04/weather_data/checkpoint")\
@@ -175,7 +175,7 @@ spark.sql('drop table if exists silver_weather_info_dynamic_v1')
 
 # Creating silver table for weather historic table
 display(spark.sql("drop table if exists silver_weather_historic"))
-display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select int(temp), int(feels_like), int(pressure), int(humidity), int(dew_point), int(uvi), int(clouds), int(visibility), int(wind_speed), int(wind_deg), int(pop), int(snow_1h),to_timestamp(int(dt)) as last_reported_datetime,main,description,icon,lat,lon,timezone,timezone_offset,rain_1h from bronze_weather_historic where dt!="dt") as a'))
+display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select float(temp), float(feels_like), float(pressure), float(humidity), float(dew_point), float(uvi), float(clouds), float(visibility), float(wind_speed), float(wind_deg), float(pop), float(snow_1h),to_timestamp(int(dt)) as last_reported_datetime,main,description,icon,lat,lon,timezone,timezone_offset,rain_1h from bronze_weather_historic where dt!="dt") as a'))
 
 # COMMAND ----------
 
