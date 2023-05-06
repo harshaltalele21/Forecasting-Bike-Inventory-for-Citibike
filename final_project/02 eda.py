@@ -302,10 +302,6 @@ display(spark.sql("select * from silver_weather_historic"))
 
 # COMMAND ----------
 
-display(agg_df_day)
-
-# COMMAND ----------
-
 agg_df_hourly_raw = raw_df.select("ride_id", "rideable_type", "started_at", "ended_at", "start_station_name", "start_station_id", "end_station_name", "end_station_id" ,"member_casual") \
                 .withColumn("year", year(col("started_at"))) \
                 .withColumn("month", month(col("started_at"))) \
@@ -381,6 +377,22 @@ fig.show()
 # COMMAND ----------
 
 fig = px.scatter(weather_agg_filtered.toPandas(), x="temp", y="humidity", title='Hourly ride count by Weather', size="num_rides", color="main")
+fig.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Using Partitioined Column in Weather Dynamic Data
+
+# COMMAND ----------
+
+dynamic_weather = spark.sql("select * from g04_db.silver_weather_info_dynamic where time > '2023-05-01 00:00:00' ")
+dynamic_weather.printSchema()
+
+# COMMAND ----------
+
+fig = px.box(dynamic_weather.toPandas(), x="temp", y="weather_main", title='Temperature by Weather')
+
 fig.show()
 
 # COMMAND ----------
