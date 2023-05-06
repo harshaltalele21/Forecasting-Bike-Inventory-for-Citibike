@@ -32,20 +32,30 @@ def extract_params(pr_model):
 
 # COMMAND ----------
 
-target_data=spark.sql("select * from target_variable")
+display(spark.sql("select max(monthofyr_sa) from target_variable where year_sa='2023'"))
+
+# COMMAND ----------
+
+display(spark.sql("select * from silver_weather_info_dynamic"))
+
+# COMMAND ----------
+
+target_data=spark.sql("select * from target_variable as a left join silver_weather_historic as b on (a.year_sa = b.year and a.monthofyr_sa = b.monthofyr and a.dateofmonth_sa = b.dateofmonth and a.hourofday_sa = b.hourofday)")
 display(target_data)
 
 # COMMAND ----------
 
 target_df = target_data.toPandas()
 
+target_df['year_sa'] = target_df['year_sa'].astype(int)
+target_df['monthofyr_sa'] = target_df['monthofyr_sa'].astype(int)
+target_df['dateofmonth_sa'] = target_df['dateofmonth_sa'].astype(int)
+target_df['hourofday_sa'] = target_df['hourofday_sa'].astype(int)
+
+
 # COMMAND ----------
 
-target_df.info()
-
-# COMMAND ----------
-
-target_df=target_df.astype(int)
+target_df.dropna(inplace=True)
 
 # COMMAND ----------
 
@@ -81,6 +91,10 @@ display(df_grouped)
 
 # COMMAND ----------
 
+max(df_grouped['ds'])
+
+# COMMAND ----------
+
 # Baseline Model Using Default Hyperparameters
 # - Horizon - period over which we forecast
 # - Initial - amount of initial training data
@@ -103,19 +117,18 @@ baseline_model_p = performance_metrics(baseline_model_cv, rolling_window=1)
 baseline_model_p.head()
 
 # Get the performance value
-print(f"MAPE of baseline model: {baseline_model_p['mape'].values[0]}")
+print(f"MAPE of baseline model: {baseline_model_p['rmse'].values[0]}")
 
 # COMMAND ----------
 
 #--------------------------------------------#
 # Automatic Hyperparameter Tuning
 #--------------------------------------------#
-
 # Set up parameter grid
 param_grid = {  
     'changepoint_prior_scale': [0.001],  # , 0.05, 0.08, 0.5
     'seasonality_prior_scale': [0.01],  # , 1, 5, 10, 12
-    'seasonality_mode': ['additive', 'multiplicative']
+    'seasonality_mode': [ 'additive', 'multiplicative']
 }
   
 # Generate all combinations of parameters
@@ -132,7 +145,13 @@ for params in all_params:
         # Fit a model using one parameter combination + holidays
         m = Prophet(**params) 
         holidays = pd.DataFrame({"ds": [], "holiday": []})
-        #m.add_country_holidays(country_name='US')
+        # m.add_country_holidays(country_name='US')
+
+        m.add_regressor('temp')
+        m.add_regressor('clouds')
+        m.add_regressor('visibility')
+        m.add_regressor('feels_like')
+        m.add_regressor('humidity')
         m.fit(df_grouped) 
 
         # Cross-validation
@@ -171,11 +190,22 @@ print(json.dumps(best_params, indent=2))
 
 # COMMAND ----------
 
+# df_grouped.sort_index(inplace=True)
+pred_input = loaded_model.make_future_dataframe(880, freq="h")
+# pred_input = pred_input.merge(df_grouped, left_on='ds', right_on='ds')
+pred_input.head(5)
+
+# COMMAND ----------
+
 loaded_model = mlflow.prophet.load_model(best_params['model'])
 
-forecast = loaded_model.predict(loaded_model.make_future_dataframe(684, freq="h"))
+forecast = loaded_model.predict(loaded_model.make_future_dataframe(880, freq="h"))
 
 print(f"forecast:\n${forecast.tail(40)}")
+
+# COMMAND ----------
+
+forecast.head(10)
 
 # COMMAND ----------
 
@@ -199,34 +229,21 @@ display(spark.sql("select * from actual_data_forecast"))
 
 
 df1=spark.sql("select *,(num_bikes_available-lag_num_bikes_available) as netchange from actual_data_forecast")
-display(df1.head(2))
+display(df1.head(5))
 
 # COMMAND ----------
 
 df1=df1.toPandas()
 df1['ds'] = df1.apply(lambda x: pd.to_datetime(f"{x['dateofmonth']}-{x['monthofyr']}-{x['year']}-{x['hourofday']}", format="%d-%m-%Y-%H"), axis=1)
-display(df1.head(2))
+display(df1.head(5))
 
 # COMMAND ----------
 
-df1.shape
-
-# COMMAND ----------
-
-display(forecast.head(2))
-
-# COMMAND ----------
-
-type(forecast)
+display(forecast.head(5))
 
 # COMMAND ----------
 
 forecast['ds_date'] = forecast['ds'].apply(lambda x: x.date())
-#forecast.to_frame()
-forecast.head(2)
-
-# COMMAND ----------
-
 forecast['ds_date'] = pd.to_datetime(forecast['ds_date'], errors='coerce')
 
 # COMMAND ----------
@@ -255,12 +272,16 @@ forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
 
 # COMMAND ----------
 
+forecast_v1
+
+# COMMAND ----------
+
 #plot the residuals
 import plotly.express as px
 fig = px.scatter(
     forecast_v1, x='yhat', y='residual',
     marginal_y='violin',
-    trendline='ols',
+    trendline='ols'
 )
 fig.show()
 
