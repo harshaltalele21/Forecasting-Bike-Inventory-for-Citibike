@@ -211,7 +211,7 @@ display(df1.head(2))
 # COMMAND ----------
 
 forecast['ds_date'] = forecast['ds'].apply(lambda x: x.date())
-forecast.to_frame()
+# forecast.to_frame()
 forecast.head(2)
 
 # COMMAND ----------
@@ -245,7 +245,7 @@ forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
 
 # COMMAND ----------
 
-plot the residuals
+# plot the residuals
 import plotly.express as px
 fig = px.scatter(
     forecast_v1, x='yhat', y='residual',
