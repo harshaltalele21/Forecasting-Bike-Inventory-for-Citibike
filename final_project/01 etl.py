@@ -12,6 +12,8 @@ bike_for_schema = spark.read.csv(BIKE_TRIP_DATA_PATH,sep=",",header="true")
 weather_for_schema = spark.read.csv(NYC_WEATHER_FILE_PATH,sep=",",header="true")
 
 
+# Read Stream One-time-operation done 
+'''
 bike_trip_data = spark \
   .readStream \
   .schema(bike_for_schema.schema) \
@@ -25,6 +27,7 @@ weather_data = spark \
   .option("maxFilesPerTrigger", 1) \
   .option("append","true") \
   .csv(NYC_WEATHER_FILE_PATH)
+  '''
 
 
 # COMMAND ----------
@@ -58,22 +61,23 @@ weather_dynamic_all.write.partitionBy("time").option("overwriteSchema", "true").
 
 # DBTITLE 1,Remove files from group location path
 # to remove files from directory
-dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_data/',True)
+# dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_data/',True)
 
 # COMMAND ----------
 
 # DBTITLE 1,Write Stream to append bike trips data
+# Write Stream data One-Time-Operation perfomred 
+
+'''
 bike_trip_data.writeStream.format("delta")\
   .outputMode("append")\
   .option("checkpointLocation","dbfs:/FileStore/tables/G04/bike_trip_data/checkpoint")\
   .start("dbfs:/FileStore/tables/G04/bike_trip_data/")
 
 
-# COMMAND ----------
-
-# Creating bike trips historic table
 bike_stream = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/bike_trip_data/")
 bike_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_bike_trip_historic")
+'''
 
 # COMMAND ----------
 
@@ -93,17 +97,17 @@ display(spark.sql('select count(*) from g04_db.bronze_bike_trip_historic where s
 # COMMAND ----------
 
 # DBTITLE 1,Write Stream to append weather data
+# Write Stream data One-Time-Operation perfomred 
+
+'''
 weather_data.writeStream.format("delta")\
   .outputMode("append")\
   .option("checkpointLocation","dbfs:/FileStore/tables/G04/weather_data/checkpoint")\
   .start("dbfs:/FileStore/tables/G04/weather_data/")
 
-
-# COMMAND ----------
-
-# Creating weather historic table
 weather_stream = spark.read.format("delta").load("dbfs:/FileStore/tables/G04/weather_data/")
 weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_weather_historic")
+'''
 
 # COMMAND ----------
 
@@ -127,7 +131,7 @@ display(spark.sql('select * from silver_station_status_dynamic'))
 # COMMAND ----------
 
 # DBTITLE 1, Creating silver tables
-
+# MAGIC %md
 
 # COMMAND ----------
 

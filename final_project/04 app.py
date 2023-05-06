@@ -4,7 +4,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Define Widgets
-dbutils.widgets.dropdown("03.hours_to_forecast", "24", ["24", "48", "72", "96"])
+dbutils.widgets.dropdown("03.hours_to_forecast", "48", ["24", "48", "72", "96"])
 dbutils.widgets.dropdown("04.frequency_to_forecast", "h", ["h", "d", "m"])
 dbutils.widgets.dropdown("05.promote_model", "Yes", ["Yes","No"])
 
@@ -24,7 +24,7 @@ print("Do you want to promote the existing staging model:",promote_model)
 # COMMAND ----------
 
 # DBTITLE 1,Remove widgets
-dbutils.widgets.removeAll()
+# dbutils.widgets.removeAll()
 
 # COMMAND ----------
 
@@ -45,6 +45,8 @@ client = MlflowClient()
 # COMMAND ----------
 
 # DBTITLE 1,Check latest staging version for Production & Staging
+ARTIFACT_PATH = "G04-model"
+
 latest_version_info_staging = client.get_latest_versions(ARTIFACT_PATH, stages=["Staging"])
 latest_version_info_production = client.get_latest_versions(ARTIFACT_PATH, stages=["Production"])
 
@@ -68,6 +70,10 @@ model_stag = mlflow.prophet.load_model(model_stag_uri)
 
 # DBTITLE 1,Transition: Staging -> Production
 model_name="G04-model"
+hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
+frequency_to_forecast = str(dbutils.widgets.get('04.frequency_to_forecast'))
+promote_model = bool(True if str(dbutils.widgets.get('05.promote_model')).lower() == 'yes' else False)
+
 
 if promote_model is True:
     client.transition_model_version_stage(
@@ -90,6 +96,10 @@ if promote_model is True:
     print("The model has been transitioned to archived")
 else:
     print("The model version does not exist")
+
+# COMMAND ----------
+
+# MAGIC %run ./includes/includes
 
 # COMMAND ----------
 
@@ -300,7 +310,3 @@ import json
 
 # Return Success
 dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
-
-# COMMAND ----------
-
-
