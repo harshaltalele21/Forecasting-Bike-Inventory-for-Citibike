@@ -125,6 +125,10 @@ display(spark.sql('show tables'))
 
 # COMMAND ----------
 
+display(spark.sql('select * from silver_station_status_dynamic'))
+
+# COMMAND ----------
+
  #Creating silver tables
 
 # COMMAND ----------
@@ -173,7 +177,7 @@ spark.sql('drop table if exists silver_weather_info_dynamic_v1')
 
 # Creating silver table for weather historic table
 display(spark.sql("drop table if exists silver_weather_historic"))
-display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select *,to_timestamp(int(dt)) as last_reported_datetime from bronze_weather_historic where dt!="dt") as a'))
+display(spark.sql('CREATE TABLE if not exists silver_weather_historic as select a.*,hour(last_reported_datetime) as hourofday, day(last_reported_datetime) as dateofmonth, dayofyear(last_reported_datetime) as dateofyear,month(last_reported_datetime) as monthofyr, year(last_reported_datetime) as year from (select int(temp), int(feels_like), int(pressure), int(humidity), int(dew_point), int(uvi), int(clouds), int(visibility), int(wind_speed), int(wind_deg), int(pop), int(snow_1h),to_timestamp(int(dt)) as last_reported_datetime,main,description,icon,lat,lon,timezone,timezone_offset,rain_1h from bronze_weather_historic where dt!="dt") as a'))
 
 # COMMAND ----------
 
@@ -185,7 +189,7 @@ spark.sql('drop table if exists silver_weather_historic_v1')
 
 # COMMAND ----------
 
-display(spark.sql('select * from silver_weather_historic '))  
+spark.sql('select * from silver_weather_historic ')
 
 # COMMAND ----------
 
@@ -195,8 +199,8 @@ display(spark.sql('select "silver_bike_trip_historic" as tablename,count(*) as r
 
 # COMMAND ----------
 
-display(spark.sql('drop table if exists target_variable'))
-display(spark.sql('create table if not exists target_variable as select a.year_sa,a.monthofyr_sa,a.dateofmonth_sa,a.hourofday_sa,coalesce(a.rides_started,0) as rides_started,coalesce(b.rides_ended,0) as rides_ended,(coalesce(b.rides_ended,0)-coalesce(a.rides_started,0)) as netchange from (select year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa,count(distinct ride_id) as rides_started from silver_bike_trip_historic where start_station_name="6 Ave & W 33 St"  and started_at<="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa) as a full outer join (select year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea,count(distinct ride_id) as rides_ended from silver_bike_trip_historic where end_station_name="6 Ave & W 33 St" and started_at="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea) as b on a.year_sa=b.year_ea and a.monthofyr_sa=b.monthofyr_ea and a.dateofmonth_sa=b.dateofmonth_ea and a.hourofday_sa=b.hourofday_ea'))  
+"""display(spark.sql('drop table if exists target_variable'))
+display(spark.sql('create table if not exists target_variable as select a.year_sa,a.monthofyr_sa,a.dateofmonth_sa,a.hourofday_sa,coalesce(a.rides_started,0) as rides_started,coalesce(b.rides_ended,0) as rides_ended,(coalesce(b.rides_ended,0)-coalesce(a.rides_started,0)) as netchange from (select year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa,count(distinct ride_id) as rides_started from silver_bike_trip_historic where start_station_name="6 Ave & W 33 St"  and started_at<="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa) as a full outer join (select year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea,count(distinct ride_id) as rides_ended from silver_bike_trip_historic where end_station_name="6 Ave & W 33 St" and started_at="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea) as b on a.year_sa=b.year_ea and a.monthofyr_sa=b.monthofyr_ea and a.dateofmonth_sa=b.dateofmonth_ea and a.hourofday_sa=b.hourofday_ea'))"""
 
 # COMMAND ----------
 
@@ -240,7 +244,7 @@ display(spark.sql('select * from silver_bike_trip_historic where (start_station_
 # COMMAND ----------
 
 #Validation - No null records
-display(spark.sql('select * from target_variable where netchange IS NULL'))
+display(spark.sql('select max(netchange) from target_variable '))
 
 # COMMAND ----------
 

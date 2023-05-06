@@ -5,8 +5,9 @@
 
 dbutils.widgets.dropdown("01.start_date", "2023-05-06", ["2023-05-06","2023-05-07", "2023-05-08", "2023-05-09", "2023-05-10", "2023-05-11", "2023-05-12"])
 dbutils.widgets.dropdown("02.end_date", "2023-05-06", ["2023-05-06","2023-05-07", "2023-05-08", "2023-05-09", "2023-05-10", "2023-05-11", "2023-05-12"])
-dbutils.widgets.dropdown("03.hours_to_forecast", "1", ["1", "2", "3", "4", "5", "6"])
-dbutils.widgets.dropdown("04.promote_model", "Yes", ["Yes","No"])
+dbutils.widgets.dropdown("03.hours_to_forecast", "24", ["24", "48", "72", "96"])
+dbutils.widgets.dropdown("04.frequency_to_forecast", "h", ["h", "d", "m"])
+dbutils.widgets.dropdown("05.promote_model", "Yes", ["Yes","No"])
 
 # COMMAND ----------
 
@@ -14,17 +15,67 @@ dbutils.widgets.dropdown("04.promote_model", "Yes", ["Yes","No"])
 start_date = str(dbutils.widgets.get('01.start_date'))
 end_date = str(dbutils.widgets.get('02.end_date'))
 hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
-promote_model = bool(True if str(dbutils.widgets.get('04.promote_model')).lower() == 'yes' else False)
+frequency_to_forecast = str(dbutils.widgets.get('04.frequency_to_forecast'))
+promote_model = bool(True if str(dbutils.widgets.get('05.promote_model')).lower() == 'yes' else False)
 
-print(start_date,end_date,hours_to_forecast)
+print(start_date,end_date,hours_to_forecast,frequency_to_forecast,promote_model)
 
 print("YOUR CODE HERE...")
 
 # COMMAND ----------
 
-# To remove any or all widgets
-dbutils.widgets.remove("01.start_date")
+# DBTITLE 1,Remove widgets
 dbutils.widgets.removeAll()
+
+# COMMAND ----------
+
+import numpy as np
+ARTIFACT_PATH = "G04-model"
+np.random.seed(12345)
+
+# COMMAND ----------
+
+from mlflow.tracking.client import MlflowClient
+
+client = MlflowClient()
+
+# COMMAND ----------
+
+# DBTITLE 1,Check latest staging version for Production & Staging
+latest_version_info_staging = client.get_latest_versions(ARTIFACT_PATH, stages=["Staging"])
+latest_version_info_production = client.get_latest_versions(ARTIFACT_PATH, stages=["Production"])
+
+latest_production_version = latest_version_info_production[0].version
+latest_staging_version = latest_version_info_staging[0].version
+#print(latest_version_info)
+print("The latest production version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_production_version))
+print("The latest staging version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_staging_version))
+
+# COMMAND ----------
+
+import mlflow
+model_stag_uri = "models:/{model_name}/staging".format(model_name=ARTIFACT_PATH)
+
+print("Loading registered model version from URI: '{model_uri}'".format(model_uri=model_stag_uri))
+
+model_stag = mlflow.prophet.load_model(model_stag_uri)
+
+# COMMAND ----------
+
+print(model_stag.version)
+
+# COMMAND ----------
+
+# DBTITLE 1,Transitioning model to Production
+if promote_model is True:
+    client.transition_model_version_stage(
+    name=model_stag.name,
+    version=model_stag.version,
+    stage='Production')
+    print("The model has been transitioned to production")
+else:
+    print("You have chosen not to promote the model")
+ 
 
 # COMMAND ----------
 
@@ -51,8 +102,8 @@ bike_station=spark.sql("select num_ebikes_available,num_docks_available,num_scoo
 
 rows = [["Current Time",str(current_weather.select("current_time").collect()[0][0])],
 ["Station Name",GROUP_STATION_ASSIGNMENT],
-["Production Model Version","Production Model Version"],
-["Staging Model Version","Staging Model Version"],
+["Production Model Version",latest_production_version],
+["Staging Model Version",latest_staging_version],
 ["Current Temp",str(current_weather.select("temp").collect()[0][0])],
 ["Current Pop",str(current_weather.select("pop").collect()[0][0])],
 ["Current Humidity",str(current_weather.select("humidity").collect()[0][0])],
@@ -96,27 +147,63 @@ display(forecasted_weather.count())
 # COMMAND ----------
 
 # DBTITLE 1,Load registered model from Production/Staging
-model_staging_uri = "models:/{model_name}/production".format(model_name=ARTIFACT_PATH)
+import mlflow
+model_prod_uri = "models:/{model_name}/production".format(model_name=ARTIFACT_PATH)
 
-print("Loading registered model version from URI: '{model_uri}'".format(model_uri=model_staging_uri))
+print("Loading registered model version from URI: '{model_uri}'".format(model_uri=model_prod_uri))
 
-model_staging = mlflow.prophet.load_model(model_staging_uri)
+model_production = mlflow.prophet.load_model(model_prod_uri)
 
 # COMMAND ----------
 
-# DBTITLE 1,Forecast for next 4 hours
-forecasted_df=model_staging.predict(model_staging.make_future_dataframe(4, freq="h"))
-model_staging.plot(model_staging.predict(model_staging.make_future_dataframe(4, freq="h")))
+from datetime import datetime
+
+current_ts = datetime.now()
+print(current_ts)
+
+# COMMAND ----------
+
+import pandas
+df = pandas.DataFrame(columns=['to','fr','diff'])
+df['to'] = [pandas.Timestamp('2023-04-01 00:00:00.000000')]
+df['fr'] = [current_ts]
+df['diff']=(df.fr-df.to).astype('timedelta64[h]')
+diff=df.iloc[0,2]
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Forecast for next n hours
+hours=int(diff)+int(hours_to_forecast)
+forecasted_df=model_production.predict(model_production.make_future_dataframe(hours, freq=frequency_to_forecast))
+model_production.plot(model_production.predict(model_production.make_future_dataframe(hours, freq=frequency_to_forecast)))
+
+# COMMAND ----------
+
+display(forecasted_df)
 
 # COMMAND ----------
 
 # DBTITLE 1,Picking the forecasted data from Apr 1'2023 onwards and creating residuals
-forecast['ds_date'] = forecast['ds'].apply(lambda x: x.date())
+forecasted_df['ds_date'] = forecasted_df['ds'].apply(lambda x: x.date())
 
-forecast['ds_date'] = pd.to_datetime(forecast['ds_date'], errors='coerce')
-forecast_residual = forecast[forecast['ds_date'] > "2023-03-31"]
+forecasted_df['ds_date'] = pd.to_datetime(forecasted_df['ds_date'], errors='coerce')
+forecast_residual = forecasted_df[forecasted_df['ds_date'] > "2023-03-31"]
 forecast_residual.shape
 
+# COMMAND ----------
+
+# DBTITLE 1,Use actual data created in ML notebook using bike station info silver tables
+
+df1=spark.sql("select *,(num_bikes_available-lag_num_bikes_available) as netchange from actual_data_forecast")
+
+df1=df1.toPandas()
+df1['ds'] = df1.apply(lambda x: pd.to_datetime(f"{x['dateofmonth']}-{x['monthofyr']}-{x['year']}-{x['hourofday']}", format="%d-%m-%Y-%H"), axis=1)
+display(df1.head(2))
+
+# COMMAND ----------
+
+# DBTITLE 1,Adding Residuals
 forecast_v1=forecast_residual.merge(df1[['ds','netchange']],how='left',on='ds')
 display(forecast_v1.head(10))
 
@@ -125,68 +212,53 @@ forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
 
 # COMMAND ----------
 
+display(forecast_v1)
+
+# COMMAND ----------
+
+# DBTITLE 1,Preparing bikes available for next 48 hours
+from datetime import datetime
+
+current_ts = datetime.now()
+forecast_after_now = forecast_v1[forecast_v1['ds'] > current_ts]
+forecast_after_now=forecast_after_now[['ds','yhat']]
+print(current_ts)
+display(forecast_after_now.head(2))
+#display(forecast_after_now['ds'].max())
+
+# COMMAND ----------
+
+max_bikes=spark.sql("select num_bikes_available from silver_station_status_dynamic order by last_reported_datetime desc limit 1")
+no_bikes_available=max_bikes.collect()[0][0]
+display(no_bikes_available)
+
+# COMMAND ----------
+
+forecast_after_now['bikes_available']=forecast_after_now['yhat'].cumsum()+no_bikes_available
+forecast_after_now['capacity']=52
+forecast_after_now.head(2)
+
+# COMMAND ----------
+
 # DBTITLE 1,Insert forecasted data to gold table
-forecast_v1.write.saveAsTable("G04_db.gold_bike_forecast", format='delta', mode='overwrite')
-
-# COMMAND ----------
-
-# DBTITLE 1,Use actual data created in ML notebook using bike station info silver tables
-
-df1=spark.sql("select *,(num_bikes_available-lag_num_bikes_available) as netchange from actual_data_forecast")
-display(df1.head(2))
-
-df1=df1.toPandas()
-df1['ds'] = df1.apply(lambda x: pd.to_datetime(f"{x['dateofmonth']}-{x['monthofyr']}-{x['year']}-{x['hourofday']}", format="%d-%m-%Y-%H"), axis=1)
-display(df1.head(2))
-
-# COMMAND ----------
-
-# DBTITLE 1,Dummy - Use actual data from bike station info silver tables and create residuals
-import pyspark
 from pyspark.sql import SparkSession
-from pyspark.sql.types import *
-from pyspark.sql.functions import *
- 
-# Creating a spark session
-spark_session = SparkSession.builder.appName(
-    'Spark_Session').getOrCreate()
-from pyspark.sql.types import StructType,StructField, StringType
-schema = StructType([
-  StructField('Time', StringType(), True),
-  StructField('#Bikes', IntegerType(), True),
-  StructField('Capacity', IntegerType(), True),
-  StructField('Forecasted', IntegerType(), True)])
-df=spark.createDataFrame([],schema)
+forecast_pyspark = spark.createDataFrame(forecast_v1)
 
-rows = [["2023-04-28T01:00:00.000+0000",int(30),int(52),int(32)],
-["2023-04-28T02:00:00.000+0000",int(33),int(52),int(31)],["2023-04-28T03:00:00.000+0000",int(36),int(52),int(35)],
-["2023-04-28T04:00:00.000+0000",int(36),int(52),int(37)],["2023-04-28T05:00:00.000+0000",int(28),int(52),int(32)],
-["2023-04-28T10:00:00.000+0000",int(50),int(52),int(45)],["2023-04-28T11:00:00.000+0000",int(57),int(52),int(55)],
-["2023-04-28T12:00:00.000+0000",int(54),int(52),int(53)],["2023-04-28T13:00:00.000+0000",int(60),int(52),int(58)],["2023-04-28T14:00:00.000+0000",int(55),int(52),int(57)]]
-columns = ["Time","#Bikes","Capacity","Forecasted"]
-
-second_df = spark_session.createDataFrame(rows, columns)
-
-first_df = df.union(second_df)
-display(first_df)
+forecast_pyspark.write.saveAsTable("G04_db.gold_bike_forecast", format='delta', mode='overwrite')
 
 # COMMAND ----------
 
 # DBTITLE 1,Visualizations - Forecasted Results + Residual Plot
-
-pdf = (
-    first_df.toPandas()
-)
 import plotly.express as px
 
 
-fig = px.line(pdf, x='Time', y='#Bikes', title='Forecasted No. of bikes (Station - 6 Ave & W 33 St)')
-fig.add_scatter(x=pdf['Time'], y=pdf['Capacity'])
-fig.add_annotation(dict(font=dict(color='black',size=15),x=0.8,y=0.65,showarrow=False,text="Station Capacity - 52",textangle=0,xanchor='left',xref="paper",yref="paper"))
-fig.add_shape(type="circle",
-    xref="x domain", yref="y domain",
-    x0=0.675, x1=0.715, y0=0.65, y1=0.8,
-)
+fig = px.line(forecast_after_now, x='ds', y='bikes_available', title='Forecasted No. of bikes (Station - 6 Ave & W 33 St)')
+fig.add_scatter(x=forecast_after_now['ds'], y=forecast_after_now['capacity'])
+fig.add_annotation(dict(font=dict(color='black',size=15),x=0.8,y=0.85,showarrow=False,text="Station Capacity - 52",textangle=0,xanchor='left',xref="paper",yref="paper"))
+#fig.add_shape(type="circle",
+#    xref="x domain", yref="y domain",
+#    x0=0.675, x1=0.715, y0=0.65, y1=0.8,
+#)
 fig.show()
 
 # COMMAND ----------
@@ -211,6 +283,14 @@ import json
 
 # Return Success
 dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
+
+# COMMAND ----------
+
+display(spark.sql("show tables"))
+
+# COMMAND ----------
+
+display(spark.sql("select * from silver_station_status_dynamic where year=2023 and monthofyr=5 and dateofmonth=5 order by last_reported_datetime desc"))
 
 # COMMAND ----------
 

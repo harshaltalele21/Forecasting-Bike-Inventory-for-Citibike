@@ -113,8 +113,8 @@ print(f"MAPE of baseline model: {baseline_model_p['mape'].values[0]}")
 
 # Set up parameter grid
 param_grid = {  
-    'changepoint_prior_scale': [0.001],  # , 0.05, 0.08, 0.5
-    'seasonality_prior_scale': [0.01],  # , 1, 5, 10, 12
+    'changepoint_prior_scale': [0.01],  # , 0.05, 0.08, 0.5
+    'seasonality_prior_scale': [0.1],  # , 1, 5, 10, 12
     'seasonality_mode': ['additive', 'multiplicative']
 }
   
@@ -173,7 +173,7 @@ print(json.dumps(best_params, indent=2))
 
 loaded_model = mlflow.prophet.load_model(best_params['model'])
 
-forecast = loaded_model.predict(loaded_model.make_future_dataframe(684, freq="h"))
+forecast = loaded_model.predict(loaded_model.make_future_dataframe(879, freq="h"))
 
 print(f"forecast:\n${forecast.tail(40)}")
 
@@ -196,7 +196,6 @@ spark.sql("create table if not exists actual_data_forecast as select a.hourofday
 display(spark.sql("select * from actual_data_forecast"))
 
 # COMMAND ----------
-
 
 df1=spark.sql("select *,(num_bikes_available-lag_num_bikes_available) as netchange from actual_data_forecast")
 display(df1.head(2))
@@ -221,48 +220,48 @@ type(forecast)
 
 # COMMAND ----------
 
-forecast['ds_date'] = forecast['ds'].apply(lambda x: x.date())
+#forecast['ds_date'] = forecast['ds'].apply(lambda x: x.date())
 #forecast.to_frame()
-forecast.head(2)
+#forecast.head(2)
 
 # COMMAND ----------
 
-forecast['ds_date'] = pd.to_datetime(forecast['ds_date'], errors='coerce')
+#forecast['ds_date'] = pd.to_datetime(forecast['ds_date'], errors='coerce')
 
 # COMMAND ----------
 
-forecast_residual = forecast[forecast['ds_date'] > "2023-03-31"]
-forecast_residual.shape
+#forecast_residual = forecast[forecast['ds_date'] > "2023-03-31"]
+#forecast_residual.shape
 
 # COMMAND ----------
 
-max(forecast_residual["ds_date"])
+#max(forecast_residual["ds_date"])
 
 # COMMAND ----------
 
-forecast_v1=forecast_residual.merge(df1[['ds','netchange']],how='left',on='ds')
-display(forecast_v1.head(10))
+#forecast_v1=forecast_residual.merge(df1[['ds','netchange']],how='left',on='ds')
+#display(forecast_v1.head(10))
 
 # COMMAND ----------
 
-forecast_v1.shape
+#forecast_v1.shape
 
 # COMMAND ----------
 
 # DBTITLE 1,Create a residual plot by joining training data with forecast
 #results=forecast[['ds','yhat']].join(df1, lsuffix='_caller', rsuffix='_other')
-forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
+#forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
 
 # COMMAND ----------
 
 #plot the residuals
-import plotly.express as px
-fig = px.scatter(
-    forecast_v1, x='yhat', y='residual',
-    marginal_y='violin',
-    trendline='ols',
-)
-fig.show()
+#import plotly.express as px
+#fig = px.scatter(
+#    forecast_v1, x='yhat', y='residual',
+#    marginal_y='violin',
+#    trendline='ols',
+#)
+#fig.show()
 
 # COMMAND ----------
 
@@ -284,9 +283,13 @@ client.transition_model_version_stage(
 
   version=model_details.version,
 
-  stage='Production',
+  stage='Staging',
 
 )
+
+# COMMAND ----------
+
+model_details.version
 
 # COMMAND ----------
 
@@ -299,14 +302,15 @@ print("The current model stage is: '{stage}'".format(stage=model_version_details
 
 # COMMAND ----------
 
-# DBTITLE 1,Check latest staging version for Production/Staging
-latest_version_info = client.get_latest_versions(ARTIFACT_PATH, stages=["Production"])
+# DBTITLE 1,Check latest staging version for Production & Staging
+latest_version_info_staging = client.get_latest_versions(ARTIFACT_PATH, stages=["Staging"])
+latest_version_info_production = client.get_latest_versions(ARTIFACT_PATH, stages=["Production"])
 
-latest_production_version = latest_version_info[0].version
-#latest_staging_version = latest_version_info[1].version
-print(latest_version_info)
+latest_production_version = latest_version_info_production[0].version
+latest_staging_version = latest_version_info_staging[0].version
+#print(latest_version_info)
 print("The latest production version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_production_version))
-#print("The latest staging version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_staging_version))
+print("The latest staging version of the model '%s' is '%s'." % (ARTIFACT_PATH, latest_staging_version))
 
 # COMMAND ----------
 
@@ -320,10 +324,6 @@ model_staging = mlflow.prophet.load_model(model_staging_uri)
 # COMMAND ----------
 
 model_staging.plot(model_staging.predict(model_staging.make_future_dataframe(36, freq="h")))
-
-# COMMAND ----------
-
-spark.sql("select * from ")
 
 # COMMAND ----------
 
