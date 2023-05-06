@@ -40,10 +40,6 @@ display(station_info)
 
 # COMMAND ----------
 
-station_info_all.select("station_type").distinct().show()
-
-# COMMAND ----------
-
 # Creating station status table for our station name
 group_id=station_info.select("station_id").collect()[0][0]
 station_status=station_status_all.filter(station_status_all["station_id"]==group_id)
@@ -58,6 +54,7 @@ weather_dynamic_all.write.partitionBy("time").option("overwriteSchema", "true").
 
 # COMMAND ----------
 
+# DBTITLE 1,Remove files from group location path
 # to remove files from directory
 dbutils.fs.rm('dbfs:/FileStore/tables/G04/bike_trip_data/',True)
 
@@ -79,7 +76,7 @@ bike_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronze_b
 
 # COMMAND ----------
 
-# Show files under group file path for respective historic data sets
+# DBTITLE 1,Show files under group file path for bike trip historic data
 display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/bike_trip_data"))
 
 # COMMAND ----------
@@ -110,7 +107,7 @@ weather_stream.write.format("delta").mode("overwrite").saveAsTable("g04_db.bronz
 
 # COMMAND ----------
 
-# Show files under group file path for respective historic data sets
+# DBTITLE 1,Show files under group file path for weather historic data
 display(dbutils.fs.ls("dbfs:/FileStore/tables/G04/weather_data"))
 
 # COMMAND ----------
@@ -129,7 +126,8 @@ display(spark.sql('select * from silver_station_status_dynamic'))
 
 # COMMAND ----------
 
- #Creating silver tables
+# DBTITLE 1, Creating silver tables
+
 
 # COMMAND ----------
 
@@ -189,21 +187,21 @@ spark.sql('drop table if exists silver_weather_historic_v1')
 
 # COMMAND ----------
 
-spark.sql('select * from silver_weather_historic ')
-
-# COMMAND ----------
-
 # Checking count of rows in each silver table
 display(spark.sql('select "silver_bike_trip_historic" as tablename,count(*) as rows from silver_bike_trip_historic union select "silver_station_status_dynamic" as tablename,count(*) as rows from silver_station_status_dynamic union select "silver_weather_historic" as tablename,count(*) as rows from silver_weather_historic union select "silver_weather_info_dynamic" as tablename,count(*) as rows from silver_weather_info_dynamic'))
 
 
 # COMMAND ----------
 
-"""display(spark.sql('drop table if exists target_variable'))
-display(spark.sql('create table if not exists target_variable as select a.year_sa,a.monthofyr_sa,a.dateofmonth_sa,a.hourofday_sa,coalesce(a.rides_started,0) as rides_started,coalesce(b.rides_ended,0) as rides_ended,(coalesce(b.rides_ended,0)-coalesce(a.rides_started,0)) as netchange from (select year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa,count(distinct ride_id) as rides_started from silver_bike_trip_historic where start_station_name="6 Ave & W 33 St"  and started_at<="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa) as a full outer join (select year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea,count(distinct ride_id) as rides_ended from silver_bike_trip_historic where end_station_name="6 Ave & W 33 St" and started_at="2023-03-31 23:59:57" and ended_at<="2023-03-31 23:59:57" group by year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea) as b on a.year_sa=b.year_ea and a.monthofyr_sa=b.monthofyr_ea and a.dateofmonth_sa=b.dateofmonth_ea and a.hourofday_sa=b.hourofday_ea'))"""
+# DBTITLE 1,Optimization Step : Z-Ordering Tables
+# None of these tables have partition column therefore, applying z-ordering for optimization
+display(spark.sql('OPTIMIZE silver_bike_trip_historic ZORDER BY (started_at,ended_at)'))
+display(spark.sql('OPTIMIZE silver_station_status_dynamic ZORDER BY (last_reported_datetime)'))
+display(spark.sql('OPTIMIZE silver_weather_historic ZORDER BY (last_reported_datetime)'))
 
 # COMMAND ----------
 
+# DBTITLE 1,Creating target variable for model training
 display(spark.sql('drop table if exists target_variable_v1'))
 
 spark.sql('create table if not exists target_variable_v1 as select a.year_sa,a.monthofyr_sa,a.dateofmonth_sa,a.hourofday_sa,b.year_ea,b.monthofyr_ea,b.dateofmonth_ea,b.hourofday_ea,coalesce(a.rides_started,0) as rides_started,coalesce(b.rides_ended,0) as rides_ended,(coalesce(b.rides_ended,0)-coalesce(a.rides_started,0)) as netchange from (select year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa,count(distinct ride_id) as rides_started from silver_bike_trip_historic where start_station_name="6 Ave & W 33 St"  and started_at<="2023-03-31 23:59:57" group by year_sa,monthofyr_sa,dateofmonth_sa,hourofday_sa) as a FULL OUTER join (select year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea,count(distinct ride_id) as rides_ended from silver_bike_trip_historic where end_station_name="6 Ave & W 33 St" and ended_at<="2023-03-31 23:59:57" group by year_ea,monthofyr_ea,dateofmonth_ea,hourofday_ea) as b on a.year_sa=b.year_ea and a.monthofyr_sa=b.monthofyr_ea and a.dateofmonth_sa=b.dateofmonth_ea and a.hourofday_sa=b.hourofday_ea')
@@ -238,6 +236,7 @@ display(spark.sql("SELECT * FROM target_variable LIMIT 20"))
 
 # COMMAND ----------
 
+# DBTITLE 1,Validation steps
 # Validation - Checking target variable data for model training 
 display(spark.sql('select * from silver_bike_trip_historic where (start_station_name="6 Ave & W 33 St" or end_station_name="6 Ave & W 33 St") and year_sa=2021 and monthofyr_sa=11 and dateofmonth_sa=1 and (hourofday_sa=0 or hourofday_ea=0) and year_ea=2021 and monthofyr_ea=11 and dateofmonth_ea=1'))
 

@@ -3,8 +3,7 @@
 
 # COMMAND ----------
 
-dbutils.widgets.dropdown("01.start_date", "2023-05-06", ["2023-05-06","2023-05-07", "2023-05-08", "2023-05-09", "2023-05-10", "2023-05-11", "2023-05-12"])
-dbutils.widgets.dropdown("02.end_date", "2023-05-06", ["2023-05-06","2023-05-07", "2023-05-08", "2023-05-09", "2023-05-10", "2023-05-11", "2023-05-12"])
+# DBTITLE 1,Define Widgets
 dbutils.widgets.dropdown("03.hours_to_forecast", "24", ["24", "48", "72", "96"])
 dbutils.widgets.dropdown("04.frequency_to_forecast", "h", ["h", "d", "m"])
 dbutils.widgets.dropdown("05.promote_model", "Yes", ["Yes","No"])
@@ -12,15 +11,15 @@ dbutils.widgets.dropdown("05.promote_model", "Yes", ["Yes","No"])
 # COMMAND ----------
 
 # DBTITLE 1,Get widgets
-start_date = str(dbutils.widgets.get('01.start_date'))
-end_date = str(dbutils.widgets.get('02.end_date'))
+#start_date = str(dbutils.widgets.get('01.start_date'))
+#end_date = str(dbutils.widgets.get('02.end_date'))
 hours_to_forecast = int(dbutils.widgets.get('03.hours_to_forecast'))
 frequency_to_forecast = str(dbutils.widgets.get('04.frequency_to_forecast'))
 promote_model = bool(True if str(dbutils.widgets.get('05.promote_model')).lower() == 'yes' else False)
 
-print(start_date,end_date,hours_to_forecast,frequency_to_forecast,promote_model)
-
-print("YOUR CODE HERE...")
+print("Hours to forecast:",hours_to_forecast)
+print("Frequency of forecast:",frequency_to_forecast)
+print("Do you want to promote the existing staging model:",promote_model)
 
 # COMMAND ----------
 
@@ -32,6 +31,10 @@ dbutils.widgets.removeAll()
 import numpy as np
 ARTIFACT_PATH = "G04-model"
 np.random.seed(12345)
+
+# COMMAND ----------
+
+pip install folium
 
 # COMMAND ----------
 
@@ -53,6 +56,7 @@ print("The latest staging version of the model '%s' is '%s'." % (ARTIFACT_PATH, 
 
 # COMMAND ----------
 
+# DBTITLE 1,Load registered model from staging
 import mlflow
 model_stag_uri = "models:/{model_name}/staging".format(model_name=ARTIFACT_PATH)
 
@@ -62,20 +66,30 @@ model_stag = mlflow.prophet.load_model(model_stag_uri)
 
 # COMMAND ----------
 
-print(model_stag.version)
+# DBTITLE 1,Transition: Staging -> Production
+model_name="G04-model"
 
-# COMMAND ----------
-
-# DBTITLE 1,Transitioning model to Production
 if promote_model is True:
     client.transition_model_version_stage(
-    name=model_stag.name,
-    version=model_stag.version,
+    name=model_name,
+    version=latest_staging_version,
     stage='Production')
     print("The model has been transitioned to production")
 else:
     print("You have chosen not to promote the model")
- 
+
+# COMMAND ----------
+
+# DBTITLE 1,Transition: Production -> Archived
+
+if promote_model is True:
+    client.transition_model_version_stage(
+    name=model_name,
+    version=latest_production_version,
+    stage='Archived')
+    print("The model has been transitioned to archived")
+else:
+    print("The model version does not exist")
 
 # COMMAND ----------
 
@@ -146,7 +160,7 @@ display(forecasted_weather.count())
 
 # COMMAND ----------
 
-# DBTITLE 1,Load registered model from Production/Staging
+# DBTITLE 1,Load registered model from Production
 import mlflow
 model_prod_uri = "models:/{model_name}/production".format(model_name=ARTIFACT_PATH)
 
@@ -163,6 +177,7 @@ print(current_ts)
 
 # COMMAND ----------
 
+# This code gives hours till now starting from 1st Apr'2023
 import pandas
 df = pandas.DataFrame(columns=['to','fr','diff'])
 df['to'] = [pandas.Timestamp('2023-04-01 00:00:00.000000')]
@@ -174,13 +189,13 @@ diff=df.iloc[0,2]
 # COMMAND ----------
 
 # DBTITLE 1,Forecast for next n hours
-hours=int(diff)+int(hours_to_forecast)
+hours=int(diff)+int(hours_to_forecast) # creating dynamic input for hours using widget outputs
 forecasted_df=model_production.predict(model_production.make_future_dataframe(hours, freq=frequency_to_forecast))
 model_production.plot(model_production.predict(model_production.make_future_dataframe(hours, freq=frequency_to_forecast)))
 
 # COMMAND ----------
 
-display(forecasted_df)
+display(forecasted_df.head(2))
 
 # COMMAND ----------
 
@@ -212,7 +227,7 @@ forecast_v1['residual'] = forecast_v1['yhat'] - forecast_v1['netchange']
 
 # COMMAND ----------
 
-display(forecast_v1)
+display(forecast_v1.head(2))
 
 # COMMAND ----------
 
@@ -228,13 +243,15 @@ display(forecast_after_now.head(2))
 
 # COMMAND ----------
 
+# DBTITLE 1,Get bikes available for latest timestamp given
 max_bikes=spark.sql("select num_bikes_available from silver_station_status_dynamic order by last_reported_datetime desc limit 1")
 no_bikes_available=max_bikes.collect()[0][0]
 display(no_bikes_available)
 
 # COMMAND ----------
 
-forecast_after_now['bikes_available']=forecast_after_now['yhat'].cumsum()+no_bikes_available
+# DBTITLE 1,Cumulative sum of yhat to get bikes available
+forecast_after_now['bikes_available']=forecast_after_now['yhat'].cumsum()+no_bikes_available # no of bikes available for the latest timestamp + cumulaive sum of yhat (since it is netchange) gave us bikes available
 forecast_after_now['capacity']=52
 forecast_after_now.head(2)
 
@@ -283,14 +300,6 @@ import json
 
 # Return Success
 dbutils.notebook.exit(json.dumps({"exit_code": "OK"}))
-
-# COMMAND ----------
-
-display(spark.sql("show tables"))
-
-# COMMAND ----------
-
-display(spark.sql("select * from silver_station_status_dynamic where year=2023 and monthofyr=5 and dateofmonth=5 order by last_reported_datetime desc"))
 
 # COMMAND ----------
 
